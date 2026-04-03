@@ -1,0 +1,254 @@
+--[[ 
+    LEVIX HUB V29 - FINAL
+    AUTO FARM + ANTI AFK + AUTO JUMP + KEYS + CLICK
+]]
+
+--// PURGE
+if game.CoreGui:FindFirstChild("LevixHub_Official") then
+    game.CoreGui.LevixHub_Official:Destroy()
+end
+
+--// SERVICES
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local WS = game:GetService("Workspace")
+local UIS = game:GetService("UserInputService")
+local VIM = game:GetService("VirtualInputManager")
+local VirtualUser = game:GetService("VirtualUser")
+
+local Player = Players.LocalPlayer
+local Network = RS:WaitForChild("Network")
+
+--// CACHE
+local damageRemote = Network:FindFirstChild("Breakables_PlayerDealDamage")
+local tapper = Network:FindFirstChild("AutoTapper_Toggle")
+
+--// SETTINGS
+local Settings = {
+    Tapping = false,
+    Teleport = false,
+    Key1 = false,
+    KeyR2 = false,
+    ClickPoint = false,
+    ClickPos = nil,
+    AutoJump = false,
+    Range = 250
+}
+
+--// ANTI AFK
+Player.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+end)
+
+--// FORCE TAP
+local LastHit = 0
+local function ForceTap(target)
+    if not target then return end
+    if tick() - LastHit < 0.15 then return end
+    LastHit = tick()
+
+    if damageRemote then
+        damageRemote:FireServer(target.Name)
+    end
+
+    if tapper then
+        if tapper:IsA("RemoteFunction") then
+            tapper:InvokeServer(true)
+        else
+            tapper:FireServer(true)
+        end
+    end
+end
+
+--// TARGET
+local function GetClosest()
+    local char = Player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local root = char.HumanoidRootPart
+    local best, dist = nil, Settings.Range
+
+    local folder = WS:FindFirstChild("__THINGS")
+    folder = folder and folder:FindFirstChild("Breakables")
+    if not folder then return end
+
+    for _, v in ipairs(folder:GetChildren()) do
+        local p = v:FindFirstChild("Main") or v:FindFirstChildWhichIsA("BasePart", true)
+        if p then
+            local d = (root.Position - p.Position).Magnitude
+            if d < dist then
+                dist = d
+                best = v
+            end
+        end
+    end
+
+    return best
+end
+
+--// CLICK SYSTEM
+local function CaptureMousePosition()
+    print("حدد موقع خلال 3 ثواني...")
+    for i = 3,1,-1 do
+        print(i)
+        task.wait(1)
+    end
+
+    Settings.ClickPos = UIS:GetMouseLocation()
+    print("تم حفظ الموقع")
+end
+
+local function ClickSavedPosition()
+    if not Settings.ClickPos then return end
+
+    local x = Settings.ClickPos.X
+    local y = Settings.ClickPos.Y
+
+    VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+    task.wait(0.05)
+    VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+end
+
+--// KEY PRESS
+local function PressKey(key)
+    VIM:SendKeyEvent(true, key, false, game)
+    task.wait(0.05)
+    VIM:SendKeyEvent(false, key, false, game)
+end
+
+--// AUTO JUMP
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if Settings.AutoJump then
+            local char = Player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end)
+
+--// MAIN LOOP
+task.spawn(function()
+    while true do
+        task.wait(Settings.Tapping and 0.08 or 0.25)
+
+        if Settings.Tapping then
+            local target = GetClosest()
+            if target then
+                ForceTap(target)
+
+                if Settings.Teleport then
+                    local part = target:FindFirstChild("Main") or target:FindFirstChildWhichIsA("BasePart", true)
+                    if part and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                        Player.Character.HumanoidRootPart.CFrame = part.CFrame * CFrame.new(0, 5, 0)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+--// KEY LOOPS
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if Settings.Key1 then
+            PressKey(Enum.KeyCode.One)
+            if Settings.ClickPoint then
+                task.wait(0.2)
+                ClickSavedPosition()
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if Settings.KeyR2 then
+            PressKey(Enum.KeyCode.R)
+            task.wait(0.1)
+            PressKey(Enum.KeyCode.Two)
+
+            if Settings.ClickPoint then
+                task.wait(0.2)
+                ClickSavedPosition()
+            end
+        end
+    end
+end)
+
+--// UI
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "LevixHub_Official"
+
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 210, 0, 340)
+Main.Position = UDim2.new(0.5, -105, 0.5, -170)
+Main.BackgroundColor3 = Color3.fromRGB(10,10,10)
+Instance.new("UICorner", Main)
+
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1,0,0,45)
+Title.Text = "LEVIX HUB V29"
+Title.TextColor3 = Color3.fromRGB(255,0,0)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+
+-- DRAG
+local d,sI,sP
+Main.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        d=true sI=i.Position sP=Main.Position
+    end
+end)
+
+UIS.InputChanged:Connect(function(i)
+    if d and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position - sI
+        Main.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
+    end
+end)
+
+UIS.InputEnded:Connect(function() d=false end)
+
+-- BUTTON
+local function AddBtn(name,y,callback)
+    local B = Instance.new("TextButton", Main)
+    B.Size = UDim2.new(0,180,0,40)
+    B.Position = UDim2.new(0,15,0,y)
+    B.BackgroundColor3 = Color3.fromRGB(25,25,25)
+    B.Text = name.." : OFF"
+    B.TextColor3 = Color3.new(1,1,1)
+    B.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", B)
+
+    local state=false
+    B.MouseButton1Click:Connect(function()
+        state = not state
+        B.Text = name..(state and " : ON" or " : OFF")
+        B.BackgroundColor3 = state and Color3.fromRGB(255,0,0) or Color3.fromRGB(25,25,25)
+        callback(state)
+    end)
+end
+
+-- BUTTONS
+AddBtn("AUTO BREAK", 50, function(v) Settings.Tapping = v end)
+AddBtn("TARGET TP", 95, function(v) Settings.Teleport = v end)
+AddBtn("KEY 1 (5s)", 140, function(v) Settings.Key1 = v end)
+AddBtn("R + 2 (5s)", 185, function(v) Settings.KeyR2 = v end)
+AddBtn("SET CLICK POINT", 230, function(v)
+    Settings.ClickPoint = v
+    if v then
+        CaptureMousePosition()
+    end
+end)
+AddBtn("AUTO JUMP (5s)", 275, function(v)
+    Settings.AutoJump = v
+end)
+
+print("LEVIX HUB V29: MAX STABLE 🚀")
