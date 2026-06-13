@@ -1,13 +1,14 @@
- -- ==========================================
--- == External Hub v12.0                    ==
--- == UI Editor + Precise Lock              ==
+-- ==========================================
+-- == External Hub v13.0 - Config UI       ==
+-- == Roblox Drag System + Config Manager  ==
 -- ==========================================
 
 local FOLDER_NAME = "ExternalHubFolder"
 local ESP_FOLDER_NAME = "ExtESP"
-local SAVE_KEY = "ExternalHub_SaveData_v11"
+local SAVE_KEY = "ExternalHub_SaveData_v13"
+local CONFIGS_KEY = "ExternalHub_Configs_v13"
 local STEAL_DELAY = 1.3
-local STEAL_RANGE = 64
+local STEAL_RANGE = 60
 local WAYPOINT_HEIGHT_OFFSET = 0
 local AUTO_MOVE_XZ_TOLERANCE = 0.5
 local AUTO_MOVE_Y_TOLERANCE = 8
@@ -28,47 +29,42 @@ local AUTO_RIGHT_COORDS = {
 -- <<< END OF COORDINATES >>>
 
 local LIMITS = {
-    MAX_NORMAL_SPD = 64, MAX_STEAL_SPD = 31, MAX_JUMP_PWR = 50, MAX_TPD_H = 15,
+    MAX_NORMAL_SPD = 62, MAX_STEAL_SPD = 31, MAX_JUMP_PWR = 50, MAX_TPD_H = 15,
     LAG_NORMAL_SPD = 30, LAG_STEAL_SPD = 14, NORMAL_JUMP = 50, LAGGER_JUMP = 40,
 }
 
-local LAG_CONFIG = { tables = 120, loopWait = 0.3, tries = 4, batchSize = 200000 }
+local LAG_CONFIG = { tables = 120, loopWait = 0.3, tries = 2, batchSize = 300000 }
 local REMOTE_PATHS = { "ReplicatedStorage.SetPlayerBlockList", "ReplicatedStorage.BlockList", "ReplicatedStorage.PlayerBlockList" }
 local DISCORD_LINK = "discord.gg/74uPHYN2s4"
 
--- ===== ANTI-EXPloit CONFIG =====
+-- ===== ANTI-EXPLOIT CONFIG =====
 local ANTI_EXPLOIT = {
-    -- Lock anti-exploit thresholds
-    MAX_TELEPORT_DIST = 80,          -- If target moves more than this instantly = teleport spoof
-    MAX_SPEED_DIFF = 200,            -- If target speed exceeds this = speed spoof
-    POSITION_SMOOTH_FACTOR = 0.7,    -- Smoothing factor for position (0-1, higher = more trust)
-    MIN_VALID_HEALTH = 0,            -- Minimum health to consider target alive
-    DESYNC_THRESHOLD = 15,           -- Position desync detection threshold
-    MAX_PREDICTION_ERROR = 50,       -- If prediction error exceeds this, reset prediction
-    VELOCITY_OUTLIER_THRESHOLD = 150, -- Velocity spikes above this = spoofed
-    ANGLE_CHANGE_LIMIT = math.rad(720), -- Max angle change per second (anti-spinbot)
-    GHOST_CHAR_TIMEOUT = 3,          -- Seconds before considering character ghosted
-    MAX_LATENCY_COMP = 0.5,          -- Max latency compensation in seconds
-    POS_HISTORY_SIZE = 30,           -- Position history buffer size for anti-spoof
-    MIN_CONSISTENT_FRAMES = 3,       -- Min frames a position must be consistent before trusting
-    HITBOX_SPOOF_DIST = 20,          -- Max allowed difference between visual and real position
-    ANTI_INVISIBLE_CHECK = true,     -- Check if target is invisible
-    ANTI_FAKE_RAGDOLL = true,        -- Detect fake ragdoll states
-    ANTI_POSITION_RESET = true,      -- Detect position reset exploits
-    ANTI_NETWORK_OWNERSHIP = true,   -- Handle network ownership exploits
-    ANTI_VELOCITY_SPOOF = true,      -- Detect velocity spoofing
-    ANTI_ANGLE_SPOOF = true,         -- Detect angle/rotation spoofing
-
-    -- Auto-move anti-exploit
-    STUCK_TIMEOUT = 5,               -- Seconds before considering stuck
-    STUCK_DIST_THRESHOLD = 3,        -- Distance threshold for stuck detection
-    PATH_DEVIATION_MAX = 50,         -- Max deviation from path before correction
-
-    -- General anti-exploit
-    ANTI_SCRIPT_DETECTION = true,    -- Detect if anti-scripts are running against us
-    VALIDATE_SERVER_POSITIONS = true, -- Cross-validate positions with server
-    ANTI_REMOTE_SPY = true,          -- Protect against remote spying
-    ANTI_CALLBACK_INJECTION = true,  -- Protect against callback injection
+    MAX_TELEPORT_DIST = 80,
+    MAX_SPEED_DIFF = 200,
+    POSITION_SMOOTH_FACTOR = 0.7,
+    MIN_VALID_HEALTH = 0,
+    DESYNC_THRESHOLD = 15,
+    MAX_PREDICTION_ERROR = 50,
+    VELOCITY_OUTLIER_THRESHOLD = 150,
+    ANGLE_CHANGE_LIMIT = math.rad(720),
+    GHOST_CHAR_TIMEOUT = 3,
+    MAX_LATENCY_COMP = 0.5,
+    POS_HISTORY_SIZE = 30,
+    MIN_CONSISTENT_FRAMES = 3,
+    HITBOX_SPOOF_DIST = 20,
+    ANTI_INVISIBLE_CHECK = true,
+    ANTI_FAKE_RAGDOLL = true,
+    ANTI_POSITION_RESET = true,
+    ANTI_NETWORK_OWNERSHIP = true,
+    ANTI_VELOCITY_SPOOF = true,
+    ANTI_ANGLE_SPOOF = true,
+    STUCK_TIMEOUT = 5,
+    STUCK_DIST_THRESHOLD = 3,
+    PATH_DEVIATION_MAX = 50,
+    ANTI_SCRIPT_DETECTION = true,
+    VALIDATE_SERVER_POSITIONS = true,
+    ANTI_REMOTE_SPY = true,
+    ANTI_CALLBACK_INJECTION = true,
 }
 
 local HttpService = game:GetService("HttpService")
@@ -83,193 +79,185 @@ local LP = Players.LocalPlayer
 repeat task.wait() until game:IsLoaded()
 
 -- ===== CLEANUP PREVIOUS INSTANCE =====
-do -- cleanup scope
-if _G.ExtRunning then
-    _G.ExtRunning = false
-    task.wait(0.3)
-end
-if _G.ExtLagRunning then
-    _G.ExtLagRunning = false
-    task.wait(0.3)
-end
-
-pcall(function()
-    local o = CoreGui:FindFirstChild(FOLDER_NAME)
-    if o then o:Destroy() end
-end)
-pcall(function()
-    local o = Camera:FindFirstChild(ESP_FOLDER_NAME)
-    if o then o:Destroy() end
-end)
-
-if _G.ExtAllConnections then
-    for _, c in ipairs(_G.ExtAllConnections) do
-        pcall(function() c:Disconnect() end)
+do
+    if _G.ExtRunning then
+        _G.ExtRunning = false
+        task.wait(0.3)
     end
-    _G.ExtAllConnections = {}
-end
+    if _G.ExtLagRunning then
+        _G.ExtLagRunning = false
+        task.wait(0.3)
+    end
 
-if _G.ExtOriginalIndex then
     pcall(function()
-        local mt = getrawmetatable(game)
-        if mt then
-            setreadonly(mt, false)
-            mt.__index = _G.ExtOriginalIndex
-            mt.__newindex = _G.ExtOriginalNewIndex
-            setreadonly(mt, true)
-        end
+        local o = CoreGui:FindFirstChild(FOLDER_NAME)
+        if o then o:Destroy() end
     end)
-    _G.ExtOriginalIndex = nil
-    _G.ExtOriginalNewIndex = nil
-end
+    pcall(function()
+        local o = Camera:FindFirstChild(ESP_FOLDER_NAME)
+        if o then o:Destroy() end
+    end)
 
-if _G.ExtLagThread then
-    pcall(function() coroutine.close(_G.ExtLagThread) end)
-    _G.ExtLagThread = nil
-end
-if _G.ExtLockC then
-    pcall(function() _G.ExtLockC:Disconnect() end)
-    _G.ExtLockC = nil
-end
-if _G.ExtSpdC then
-    pcall(function() _G.ExtSpdC:Disconnect() end)
-    _G.ExtSpdC = nil
-end
-if _G.ExtUnwalkC then
-    pcall(function() _G.ExtUnwalkC:Disconnect() end)
-    _G.ExtUnwalkC = nil
-end
-
-pcall(function()
-    local h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if h then
-        h.Velocity = Vector3.new(0, 0, 0)
-        local a = h:FindFirstChild("LockAngVel")
-        if a then a:Destroy() end
-        local t = h:FindFirstChild("LockBodyAtt")
-        if t then t:Destroy() end
+    if _G.ExtAllConnections then
+        for _, c in ipairs(_G.ExtAllConnections) do
+            pcall(function() c:Disconnect() end)
+        end
+        _G.ExtAllConnections = {}
     end
-end)
-pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(10000) end)
 
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LP and p.Character then
+    if _G.ExtOriginalIndex then
         pcall(function()
-            for _, obj in ipairs(p.Character:GetDescendants()) do
-                if obj:IsA("BillboardGui") and obj.Name == "ExtSpdUI" then
-                    obj:Destroy()
-                end
+            local mt = getrawmetatable(game)
+            if mt then
+                setreadonly(mt, false)
+                mt.__index = _G.ExtOriginalIndex
+                mt.__newindex = _G.ExtOriginalNewIndex
+                setreadonly(mt, true)
             end
         end)
-    end
-end
-task.wait(0.5)
-end -- end cleanup do block
-
--- ===== WHITELIST CHECK (ULTRA STRICT + REDUNDANT) =====
-do -- whitelist scope
-local WL_OK = false
-local WL_REASON = ""
-local WL_ATTEMPTS = 0
-local MAX_WL_ATTEMPTS = 3
-
-local function CheckWhitelist()
-    WL_OK = false
-    WL_REASON = ""
-    WL_ATTEMPTS = WL_ATTEMPTS + 1
-
-    -- ===== METHOD 1: Primary GitHub URL =====
-    local s1, r1 = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/refs/heads/main/keys.json"))
-    end)
-
-    if s1 and r1 then
-        if type(r1) == "table" and r1.whitelist then
-            for _, id in ipairs(r1.whitelist) do
-                if tonumber(id) == LP.UserId then
-                    WL_OK = true
-                    WL_REASON = "PRIMARY_OK"
-                    return true
-                end
-            end
-        end
-        -- Check if whitelist table exists but user not in it
-        if type(r1) == "table" and r1.whitelist then
-            WL_REASON = "NOT_IN_WHITELIST (fetched " .. #r1.whitelist .. " ids)"
-        else
-            WL_REASON = "INVALID_JSON_FORMAT"
-        end
-    else
-        WL_REASON = "FETCH_FAILED: " .. tostring(r1)
+        _G.ExtOriginalIndex = nil
+        _G.ExtOriginalNewIndex = nil
     end
 
-    -- ===== METHOD 2: Retry with different URL format =====
-    if not WL_OK then
-        local s2, r2 = pcall(function()
-            return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/main/keys.json"))
-        end)
-        if s2 and r2 and type(r2) == "table" and r2.whitelist then
-            for _, id in ipairs(r2.whitelist) do
-                if tonumber(id) == LP.UserId then
-                    WL_OK = true
-                    WL_REASON = "FALLBACK_URL_OK"
-                    return true
-                end
-            end
-        end
+    if _G.ExtLagThread then
+        pcall(function() coroutine.close(_G.ExtLagThread) end)
+        _G.ExtLagThread = nil
+    end
+    if _G.ExtLockC then
+        pcall(function() _G.ExtLockC:Disconnect() end)
+        _G.ExtLockC = nil
+    end
+    if _G.ExtSpdC then
+        pcall(function() _G.ExtSpdC:Disconnect() end)
+        _G.ExtSpdC = nil
+    end
+    if _G.ExtUnwalkC then
+        pcall(function() _G.ExtUnwalkC:Disconnect() end)
+        _G.ExtUnwalkC = nil
     end
 
-    -- ===== METHOD 3: Check cached whitelist from previous session =====
-    if not WL_OK then
-        local s3, cached = pcall(function()
-            if isfile and isfile("ExternalHub_WhitelistCache") then
-                return HttpService:JSONDecode(readfile("ExternalHub_WhitelistCache"))
-            end
-            return nil
-        end)
-        if s3 and cached and type(cached) == "table" and cached.whitelist then
-            for _, id in ipairs(cached.whitelist) do
-                if tonumber(id) == LP.UserId then
-                    WL_OK = true
-                    WL_REASON = "CACHED_OK"
-                    return true
-                end
-            end
-        end
-    end
-
-    return false
-end
-
--- Try up to MAX_WL_ATTEMPTS times with delays
-for attempt = 1, MAX_WL_ATTEMPTS do
-    CheckWhitelist()
-    if WL_OK then break end
-    if attempt < MAX_WL_ATTEMPTS then
-        task.wait(1.5)
-    end
-end
-
--- Cache the whitelist if we fetched it successfully (for next time)
-if not WL_OK then
     pcall(function()
-        local s, r = pcall(function()
+        local h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+        if h then
+            h.Velocity = Vector3.new(0, 0, 0)
+            local a = h:FindFirstChild("LockAngVel")
+            if a then a:Destroy() end
+            local t = h:FindFirstChild("LockBodyAtt")
+            if t then t:Destroy() end
+        end
+    end)
+    pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(10000) end)
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            pcall(function()
+                for _, obj in ipairs(p.Character:GetDescendants()) do
+                    if obj:IsA("BillboardGui") and obj.Name == "ExtSpdUI" then
+                        obj:Destroy()
+                    end
+                end
+            end)
+        end
+    end
+    task.wait(0.5)
+end
+
+-- ===== WHITELIST CHECK =====
+do
+    local WL_OK = false
+    local WL_REASON = ""
+    local WL_ATTEMPTS = 0
+    local MAX_WL_ATTEMPTS = 3
+
+    local function CheckWhitelist()
+        WL_OK = false
+        WL_REASON = ""
+        WL_ATTEMPTS = WL_ATTEMPTS + 1
+
+        local s1, r1 = pcall(function()
             return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/refs/heads/main/keys.json"))
         end)
-        if s and r and type(r) == "table" then
-            if writefile then
-                writefile("ExternalHub_WhitelistCache", HttpService:JSONEncode(r))
+
+        if s1 and r1 then
+            if type(r1) == "table" and r1.whitelist then
+                for _, id in ipairs(r1.whitelist) do
+                    if tonumber(id) == LP.UserId then
+                        WL_OK = true
+                        WL_REASON = "PRIMARY_OK"
+                        return true
+                    end
+                end
+            end
+            if type(r1) == "table" and r1.whitelist then
+                WL_REASON = "NOT_IN_WHITELIST"
+            else
+                WL_REASON = "INVALID_JSON_FORMAT"
+            end
+        else
+            WL_REASON = "FETCH_FAILED: " .. tostring(r1)
+        end
+
+        if not WL_OK then
+            local s2, r2 = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/main/keys.json"))
+            end)
+            if s2 and r2 and type(r2) == "table" and r2.whitelist then
+                for _, id in ipairs(r2.whitelist) do
+                    if tonumber(id) == LP.UserId then
+                        WL_OK = true
+                        WL_REASON = "FALLBACK_URL_OK"
+                        return true
+                    end
+                end
             end
         end
-    end)
-end
 
--- Final check
-if not WL_OK then
-    LP:Kick("Access Denied: " .. WL_REASON .. " | UserId: " .. tostring(LP.UserId) .. " | Attempts: " .. WL_ATTEMPTS)
-    return
+        if not WL_OK then
+            local s3, cached = pcall(function()
+                if isfile and isfile("ExternalHub_WhitelistCache") then
+                    return HttpService:JSONDecode(readfile("ExternalHub_WhitelistCache"))
+                end
+                return nil
+            end)
+            if s3 and cached and type(cached) == "table" and cached.whitelist then
+                for _, id in ipairs(cached.whitelist) do
+                    if tonumber(id) == LP.UserId then
+                        WL_OK = true
+                        WL_REASON = "CACHED_OK"
+                        return true
+                    end
+                end
+            end
+        end
+        return false
+    end
+
+    for attempt = 1, MAX_WL_ATTEMPTS do
+        CheckWhitelist()
+        if WL_OK then break end
+        if attempt < MAX_WL_ATTEMPTS then
+            task.wait(1.5)
+        end
+    end
+
+    if not WL_OK then
+        pcall(function()
+            local s, r = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/refs/heads/main/keys.json"))
+            end)
+            if s and r and type(r) == "table" then
+                if writefile then
+                    writefile("ExternalHub_WhitelistCache", HttpService:JSONEncode(r))
+                end
+            end
+        end)
+    end
+
+    if not WL_OK then
+        LP:Kick("Access Denied: " .. WL_REASON .. " | UserId: " .. tostring(LP.UserId) .. " | Attempts: " .. WL_ATTEMPTS)
+        return
+    end
 end
-end -- end whitelist scope
 
 _G.ExtRunning = true
 _G.ExtLagRunning = true
@@ -294,7 +282,7 @@ local ESPFolder = Instance.new("Folder")
 ESPFolder.Name = ESP_FOLDER_NAME
 ESPFolder.Parent = Camera
 
-local SC = math.clamp(math.min(Camera.ViewportSize.X / 1920, Camera.ViewportSize.Y / 1080), 0.7, 1.5)
+local SC = math.clamp(math.min(Camera.ViewportSize.X / 1920, Camera.ViewportSize.Y / 1080), 0.5, 1.5)
 
 -- ===== COLORS =====
 local C = {
@@ -309,6 +297,10 @@ local C = {
     HVR = Color3.fromRGB(20, 40, 25),
     YEL = Color3.fromRGB(255, 255, 0),
     ORG = Color3.fromRGB(255, 165, 0),
+    PURPLE = Color3.fromRGB(147, 51, 234),
+    BLUE = Color3.fromRGB(59, 130, 246),
+    WHITE = Color3.fromRGB(255, 255, 255),
+    BLACK = Color3.fromRGB(0, 0, 0),
 }
 
 -- ===== LANGUAGE =====
@@ -330,6 +322,15 @@ local LD = {
         auto_left = "AUTO LEFT", auto_right = "AUTO RIGHT",
         anti_spoof = "ANTI-SPOOF", spoof_detected = "SPOOF DETECTED",
         target_ghosted = "TARGET GHOSTED", lock_broken = "LOCK BROKEN",
+        config = "CONFIG", add_config = "ADD CONFIG", edit_config = "EDIT CONFIG",
+        delete_config = "DELETE", save_config = "SAVE", load_config = "LOAD",
+        config_name = "Config Name", enter_name = "Enter config name...",
+        reset = "RESET", exit = "EXIT", move_ui = "MOVE UI",
+        auto_steal = "AUTO STEAL", steal_time = "Steal Time", steal_range = "Steal Range",
+        lag_tables = "Lag Tables", lag_wait = "Lag Wait", lag_batch = "Lag Batch",
+        lag_settings = "LAGGER SETTINGS", lock_settings = "LOCK SETTINGS",
+        lock_power = "Lock Power", lock_tables = "Tables", lock_loop = "Loop Wait", lock_batch = "Batch Size",
+        lock_power_desc = "Adjust lock aggression (1-100)",
     },
 }
 
@@ -426,17 +427,17 @@ NotifGui.ResetOnSpawn = false
 NotifGui.DisplayOrder = 998
 NotifGui.Parent = MainFolder
 
-do -- notif layout setup
-local NotifLay = Instance.new("UIListLayout")
-NotifLay.SortOrder = Enum.SortOrder.LayoutOrder
-NotifLay.Padding = UDim.new(0, 6)
-NotifLay.VerticalAlignment = Enum.VerticalAlignment.Bottom
-NotifLay.Parent = NotifGui
+do
+    local NotifLay = Instance.new("UIListLayout")
+    NotifLay.SortOrder = Enum.SortOrder.LayoutOrder
+    NotifLay.Padding = UDim.new(0, 6)
+    NotifLay.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    NotifLay.Parent = NotifGui
 
-local NotifPad = Instance.new("UIPadding")
-NotifPad.PaddingBottom = UDim.new(0, 15)
-NotifPad.PaddingRight = UDim.new(0, 15)
-NotifPad.Parent = NotifGui
+    local NotifPad = Instance.new("UIPadding")
+    NotifPad.PaddingBottom = UDim.new(0, 15)
+    NotifPad.PaddingRight = UDim.new(0, 15)
+    NotifPad.Parent = NotifGui
 end
 
 local function Notify(title, text, dur, col)
@@ -517,22 +518,22 @@ local ST = {
     AutoLeftOn = false, AutoRightOn = false,
     LockTarget = nil, LastTargetPos = nil, LastTargetTime = 0, PredictedVel = Vector3.zero,
     UnwalkConn = nil,
-
-    -- ===== ANTI-EXPLOIT STATE (NEW) =====
-    TargetPosHistory = {},          -- Position history buffer per target
-    TargetVelHistory = {},          -- Velocity history buffer per target
-    TargetConsistentFrames = {},    -- Frame counter for consistent position verification
-    TargetGhostTimers = {},         -- Timer for ghost character detection
-    TargetLastValidPos = {},        -- Last known valid position per target
-    TargetSpoofCount = {},          -- Spoof detection counter per target
-    LockBrokenBySpoof = false,      -- Flag: lock was broken by anti-script
-    AutoMoveStuckTimer = 0,         -- Timer for stuck detection in auto-move
-    AutoMoveLastPos = Vector3.zero, -- Last position for stuck detection
-    SpoofAlertShown = false,        -- Flag to avoid spamming spoof alerts
-    AntiScriptDetected = false,     -- Flag for anti-script detection
+    TargetPosHistory = {},
+    TargetVelHistory = {},
+    TargetConsistentFrames = {},
+    TargetGhostTimers = {},
+    TargetLastValidPos = {},
+    TargetSpoofCount = {},
+    LockBrokenBySpoof = false,
+    AutoMoveStuckTimer = 0,
+    AutoMoveLastPos = Vector3.zero,
+    SpoofAlertShown = false,
+    AntiScriptDetected = false,
     EditMode = false,
-    EditConfigs = {},
-    ActiveConfigName = nil,
+    Configs = {},
+    ActiveConfig = nil,
+    LockPower = 50,
+    ConfigUIVisible = false,
 }
 
 local SaveData = {}
@@ -543,7 +544,7 @@ local UIElements = {}
 local HotkeyConfig = {}
 local LAG_ST = { LaggerOn = false, LaggerThread = nil, boundKey = nil, listening = false }
 
--- ===== SAVE/LOAD SYSTEM (ENHANCED - EVERY 2 SEC) =====
+-- ===== SAVE/LOAD SYSTEM =====
 local function LoadSave()
     local s, r = pcall(function()
         if isfile and isfile(SAVE_KEY) then
@@ -562,20 +563,16 @@ local _LoadedSave = LoadSave()
 local function SaveSave()
     pcall(function()
         if not writefile then return end
-
-        -- ===== SAVE SPEEDS (TextBox values) =====
         SaveData.Speeds = SaveData.Speeds or {}
         for k, bx in pairs(BX) do
             if bx and bx.Parent then
                 local txt = bx.Text
-                -- Validate: only save if it's a valid number
                 if txt and txt ~= "" and tonumber(txt) then
                     SaveData.Speeds[k] = txt
                 end
             end
         end
 
-        -- ===== SAVE UI POSITIONS =====
         SaveData.Positions = SaveData.Positions or {}
         for name, elem in pairs(UIElements) do
             if elem and elem.Parent then
@@ -586,7 +583,6 @@ local function SaveSave()
             end
         end
 
-        -- ===== SAVE HOTKEYS =====
         SaveData.Hotkeys = SaveData.Hotkeys or {}
         for _, cfg in ipairs(HotkeyConfig) do
             if cfg.key and cfg.saveName then
@@ -594,22 +590,21 @@ local function SaveSave()
             end
         end
 
-        -- ===== SAVE LAGGER KEYBIND =====
         if LAG_ST.boundKey then
             SaveData.LaggerKey = LAG_ST.boundKey.Name
         else
             SaveData.LaggerKey = nil
         end
 
-        -- ===== SAVE MODE STATE =====
         SaveData.Mode = ST.SpdMode
+        SaveData.LockPower = ST.LockPower
+        SaveData.Configs = ST.Configs
+        SaveData.ActiveConfig = ST.ActiveConfig
 
-        -- ===== WRITE FILE =====
         writefile(SAVE_KEY, HttpService:JSONEncode(SaveData))
     end)
 end
 
--- ===== CORRECT & VALIDATE TEXTBOX VALUES EVERY FRAME =====
 local function CorrectTextBoxes()
     pcall(function()
         for k, bx in pairs(BX) do
@@ -618,7 +613,6 @@ local function CorrectTextBoxes()
                 if txt and txt ~= "" then
                     local num = tonumber(txt)
                     if num then
-                        -- Clamp to valid range
                         local clamped = math.clamp(num, 0, 999)
                         local rounded = math.floor(clamped * 100 + 0.5) / 100
                         if rounded ~= num then
@@ -631,7 +625,6 @@ local function CorrectTextBoxes()
     end)
 end
 
--- ===== FORCE RESTORE TEXTBOX VALUES FROM SAVE =====
 local function RestoreTextBoxValues()
     pcall(function()
         if not _LoadedSave.Speeds then return end
@@ -646,7 +639,6 @@ local function RestoreTextBoxValues()
     end)
 end
 
--- ===== FORCE RESTORE KEYBINDS FROM SAVE =====
 local function RestoreKeybinds()
     pcall(function()
         if not _LoadedSave.Hotkeys then return end
@@ -679,11 +671,9 @@ end
 
 local function GetCoord(coord)
     if type(coord) == "table" then
-        -- Number-only array format: {x, y, z}
         if coord[1] then
             return coord[1], coord[2] or 0, coord[3] or 0
         end
-        -- Named key format: {x=, y=, z=}
         return coord.x or 0, coord.y or 0, coord.z or 0
     end
     return 0, 0, 0
@@ -711,15 +701,19 @@ local function iS()
     return s and r
 end
 
--- ===== FORWARD DECLARATION: SyncToggles =====
--- (defined later, but declared here to fix forward reference error)
+-- ===== FORWARD DECLARATIONS =====
 local SyncToggles
-local EnterEditMode
-local ExitEditMode
+local ShowConfigUI
+local HideConfigUI
+local SaveConfig
+local LoadConfig
+local DeleteConfig
+local ResetAllToDefaults
+local RefreshConfigList
+local UpdateMode
+local PrebuildPayloads
 
--- ===== ANTI-EXPLOIT: TARGET VALIDATION SYSTEM =====
--- This system validates target positions and detects various spoofing techniques
-
+-- ===== ANTI-EXPLOIT: TARGET VALIDATION =====
 local function ResetTargetTracking(player)
     if not player then return end
     ST.TargetPosHistory[player] = nil
@@ -730,9 +724,6 @@ local function ResetTargetTracking(player)
     ST.TargetSpoofCount[player] = nil
 end
 
--- ===== ANTI-EXPLOIT: SUB-CHECK FUNCTIONS (split to avoid 200 register limit) =====
-
--- CHECK 1: Invisible/Ghost character detection
 local function CheckGhostChar(player, char)
     if not ANTI_EXPLOIT.ANTI_INVISIBLE_CHECK then return false end
     local allInv = true
@@ -753,7 +744,6 @@ local function CheckGhostChar(player, char)
     return false
 end
 
--- CHECK 4: Teleport & velocity spoof detection
 local function CheckTeleportAndSpeed(player, curPos, curVel, hist)
     if #hist < 2 then return false, nil end
     local prev = hist[#hist - 1]
@@ -773,7 +763,6 @@ local function CheckTeleportAndSpeed(player, curPos, curVel, hist)
     return false, nil
 end
 
--- CHECK 5: Position jitter (anti-lock desync)
 local function CheckPositionJitter(player, hist)
     if #hist < 5 then return false, nil end
     local rp = {}
@@ -795,7 +784,6 @@ local function CheckPositionJitter(player, hist)
     return false, nil
 end
 
--- CHECK 6: Angle spoof (anti-spinbot)
 local function CheckAngleSpoof(player, hist)
     if not ANTI_EXPLOIT.ANTI_ANGLE_SPOOF or #hist < 3 then return false, nil end
     local angles = {}
@@ -816,7 +804,6 @@ local function CheckAngleSpoof(player, hist)
     return false, nil
 end
 
--- CHECK 7: Hitbox spoof
 local function CheckHitboxSpoof(player, char)
     if not ANTI_EXPLOIT.ANTI_NETWORK_OWNERSHIP then return false, nil end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -829,7 +816,6 @@ local function CheckHitboxSpoof(player, char)
     return false, nil
 end
 
--- CHECK 8: Fake ragdoll
 local function CheckFakeRagdoll(player, char, curVel)
     if not ANTI_EXPLOIT.ANTI_FAKE_RAGDOLL then return false, nil end
     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -844,7 +830,6 @@ local function CheckFakeRagdoll(player, char, curVel)
     return false, nil
 end
 
--- CHECK 9: Position reset exploit
 local function CheckPositionReset(player, hist)
     if not ANTI_EXPLOIT.ANTI_POSITION_RESET or #hist < 4 then return false, nil end
     local cur = hist[#hist].pos
@@ -864,8 +849,6 @@ local function CheckPositionReset(player, hist)
     return false, nil
 end
 
--- Validate a target's position against anti-exploit checks
--- Returns: validPosition (Vector3 or nil), isSpoofed (bool), spoofType (string or nil)
 local function ValidateTargetPosition(player, char)
     if not player or not char then return nil, true, "NO_CHAR" end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -875,17 +858,14 @@ local function ValidateTargetPosition(player, char)
     local currentPos = hrp.Position
     local currentVel = hrp.AssemblyLinearVelocity
 
-    -- CHECK 1 & 2: Ghost + Health
     if CheckGhostChar(player, char) then return nil, true, "GHOST_CHAR" end
     if hum.Health <= ANTI_EXPLOIT.MIN_VALID_HEALTH then return nil, true, "DEAD" end
 
-    -- CHECK 3: Update position history
     if not ST.TargetPosHistory[player] then ST.TargetPosHistory[player] = {} end
     local history = ST.TargetPosHistory[player]
     table.insert(history, { pos = currentPos, time = tick(), vel = currentVel })
     if #history > ANTI_EXPLOIT.POS_HISTORY_SIZE then table.remove(history, 1) end
 
-    -- Run sub-checks
     local isSpoofed, spoofType = false, nil
     local s, t
 
@@ -917,7 +897,6 @@ local function ValidateTargetPosition(player, char)
         if s then isSpoofed, spoofType = true, t end
     end
 
-    -- HANDLE SPOOFED TARGETS
     if isSpoofed then
         local spoofCount = ST.TargetSpoofCount[player] or 0
         if spoofCount > 5 then
@@ -932,34 +911,23 @@ local function ValidateTargetPosition(player, char)
         return currentPos, true, spoofType
     end
 
-    -- Position is valid
     ST.TargetConsistentFrames[player] = (ST.TargetConsistentFrames[player] or 0) + 1
     ST.TargetLastValidPos[player] = currentPos
     ST.TargetSpoofCount[player] = math.max(0, (ST.TargetSpoofCount[player] or 0) - 1)
     return currentPos, false, nil
 end
 
--- ===== ANTI-EXPLOIT: SMART PREDICTION SYSTEM =====
--- Improved prediction that accounts for anti-scripts
-
 local function SmartPredictPosition(player, char, dt)
     if not player or not char then return nil end
-
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
-
     local validPos, isSpoofed, spoofType = ValidateTargetPosition(player, char)
     if not validPos then return nil end
-
-    -- If spoofed, reduce prediction aggressiveness
     local predictFactor = isSpoofed and 0.2 or 0.6
-
     local history = ST.TargetPosHistory[player]
     if not history or #history < 3 then
         return validPos
     end
-
-    -- Calculate velocity from recent history (more stable than instantaneous)
     local recentCount = math.min(#history, 5)
     local avgVel = Vector3.zero
     for i = #history - recentCount + 2, #history do
@@ -970,26 +938,18 @@ local function SmartPredictPosition(player, char, dt)
         end
     end
     avgVel = avgVel / (recentCount - 1)
-
-    -- Filter out extreme velocity (likely spoofed)
     local horizVel = Vector3.new(avgVel.X, 0, avgVel.Z)
     if horizVel.Magnitude > ANTI_EXPLOIT.MAX_SPEED_DIFF then
-        -- Cap velocity to max expected
         horizVel = horizVel.Unit * ANTI_EXPLOIT.MAX_SPEED_DIFF
     end
-
-    -- Apply prediction with latency compensation
     local latencyComp = math.min(ANTI_EXPLOIT.MAX_LATENCY_COMP, 0.15)
     local predictedPos = validPos + horizVel * latencyComp * predictFactor
-
-    -- Clamp prediction error
     if ST.TargetLastValidPos[player] then
         local predictionError = (predictedPos - ST.TargetLastValidPos[player]).Magnitude
         if predictionError > ANTI_EXPLOIT.MAX_PREDICTION_ERROR then
             predictedPos = ST.TargetLastValidPos[player]:Lerp(predictedPos, ANTI_EXPLOIT.MAX_PREDICTION_ERROR / predictionError)
         end
     end
-
     return predictedPos
 end
 
@@ -1016,18 +976,16 @@ local function FindBat()
     return nil
 end
 
--- ===== FIND NEAREST PLAYER (WITH ANTI-EXPLOIT) =====
+-- ===== FIND NEAREST PLAYER =====
 local function FindNearest()
     local h = gH()
     if not h then return nil end
-
     local n, md = nil, math.huge
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LP and p.Character then
             local o = p.Character:FindFirstChild("HumanoidRootPart")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
             if o and hum and hum.Health > 0 then
-                -- Validate target position before considering
                 local validPos, isSpoofed = ValidateTargetPosition(p, p.Character)
                 if validPos and not isSpoofed then
                     local d = (h.Position - validPos).Magnitude
@@ -1036,7 +994,6 @@ local function FindNearest()
                         n = p
                     end
                 elseif validPos and isSpoofed then
-                    -- Still consider spoofed targets but with penalty distance
                     local d = (h.Position - validPos).Magnitude + 10
                     if d < md then
                         md = d
@@ -1098,12 +1055,14 @@ local function IRS_ActivateReset()
     ST.RealSpeed = hum.WalkSpeed
     ST.SpoofActive = true
 
-    task.delay(0.9, function()
+    -- Fast reset: 0.3s spoof then restore
+    task.delay(0.3, function()
         ST.SpoofActive = false
         if hum and hum.Parent then
             hum.WalkSpeed = ST.RealSpeed
         end
-        task.delay(0.2, function() ST.IRS_isExecuting = false end)
+        -- Quick cooldown before next use
+        task.delay(0.1, function() ST.IRS_isExecuting = false end)
     end)
 end
 
@@ -1162,24 +1121,55 @@ local function FindAnyRemote()
 end
 
 -- ===== LAGGER SYSTEM =====
+-- ===== SINGLE PAYLOAD REUSE (ZERO BUILD LAG) =====
+-- Build ONCE, reuse FOREVER. No memory allocation during lag loop.
+-- The SAME table reference is sent every tick - Lua garbage collector
+-- never needs to clean up old payloads because nothing new is created.
+local ReusablePayload = nil
+local PayloadBuildKey = nil  -- tracks config used to build current payload
+
+local function BuildPayloadOnce(tc, bs)
+    -- Check if we already have a payload for these exact params
+    local key = tostring(tc) .. "_" .. tostring(bs)
+    if ReusablePayload and PayloadBuildKey == key then
+        return ReusablePayload
+    end
+    -- Build new payload only when config actually changes
+    ReusablePayload = nil
+    PayloadBuildKey = key
+    local m = {}
+    local n = {}
+    local z = n
+    for i = 1, tc do
+        local ins = {}
+        table.insert(z, ins)
+        z = ins
+    end
+    local mi = math.floor(bs / (tc + 2))
+    for i = 1, mi do
+        table.insert(m, n)
+        if i % 8000 == 0 then task.wait() end
+    end
+    ReusablePayload = m
+    return m
+end
+
+-- Rebuild payload when config changes (slider, etc)
+local function RebuildPayload()
+    ReusablePayload = nil
+    PayloadBuildKey = nil
+    BuildPayloadOnce(LAG_CONFIG.tables, LAG_CONFIG.batchSize)
+end
+
+-- Pre-build payload once, reuse it FOREVER (ZERO allocation in lag loop)
+function PrebuildPayloads()
+    BuildPayloadOnce(LAG_CONFIG.tables, LAG_CONFIG.batchSize)
+end
+
 local function startLagger()
     if LAG_ST.LaggerThread then return end
-    local function createLagPayload(tc, bs)
-        local m = {}
-        local n = {}
-        local z = n
-        for i = 1, tc do
-            local ins = {}
-            table.insert(z, ins)
-            z = ins
-        end
-        local mi = math.floor(bs / (tc + 2))
-        for i = 1, mi do
-            table.insert(m, n)
-            if i % 8000 == 0 then task.wait() end
-        end
-        return m
-    end
+    -- Pre-build payloads to avoid lag during sending
+    PrebuildPayloads()
     local function sendLagPayload(p)
         local r = FindAnyRemote()
         if r and r.Parent then
@@ -1195,8 +1185,8 @@ local function startLagger()
     local function startLaggerLoop()
         while LAG_ST.LaggerOn and _G.ExtRunning and CoreActive do
             pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge) end)
-            local payload = createLagPayload(LAG_CONFIG.tables, LAG_CONFIG.batchSize)
-            task.spawn(sendLagPayload, payload)
+            -- Reuse the SAME payload every time - ZERO allocation
+            task.spawn(sendLagPayload, ReusablePayload)
             task.wait(math.max(LAG_CONFIG.loopWait, 0.05))
         end
     end
@@ -1333,19 +1323,15 @@ local function ProcessLockFrame(dt)
         local e = t.Character:FindFirstChild("HumanoidRootPart")
         local hum = t.Character:FindFirstChildOfClass("Humanoid")
         if e and hum and hum.Health > 0 then
-
-            -- ===== ANTI-EXPLOIT: Validate target position =====
             local validPos, isSpoofed, spoofType = ValidateTargetPosition(t, t.Character)
 
             if not validPos then
-                -- Target is completely spoofed/ghosted - break lock temporarily
                 ST.LockBrokenBySpoof = true
                 if not ST.SpoofAlertShown then
                     Notify("EXTERNAL HUB", L("target_ghosted") .. ": " .. (spoofType or "UNKNOWN"), 2, C.YEL)
                     ST.SpoofAlertShown = true
                     task.delay(3, function() ST.SpoofAlertShown = false end)
                 end
-                -- Try to find a different target
                 local altTarget = FindNearest()
                 if altTarget and altTarget ~= t then
                     t = altTarget
@@ -1354,7 +1340,6 @@ local function ProcessLockFrame(dt)
                     validPos = e.Position
                     isSpoofed = false
                 else
-                    -- No valid target, stop velocity
                     h.Velocity = Vector3.new(0, h.Velocity.Y, 0)
                     pcall(function()
                         local a = h:FindFirstChild("LockAngVel")
@@ -1375,68 +1360,50 @@ local function ProcessLockFrame(dt)
                 local timeDiff = now - ST.LastTargetTime
                 if timeDiff > 0.01 then
                     local newVel = (validPos - ST.LastTargetPos) / timeDiff
-
-                    -- Anti-spoof: filter out extreme velocity changes
                     local velDiff = (newVel - ST.PredictedVel).Magnitude
                     if velDiff < ANTI_EXPLOIT.VELOCITY_OUTLIER_THRESHOLD then
                         ST.PredictedVel = ST.PredictedVel * 0.6 + newVel * 0.4
                     else
-                        -- Sudden velocity change - likely spoof, reduce update
                         ST.PredictedVel = ST.PredictedVel * 0.85 + newVel * 0.15
                     end
-
                     ST.LastTargetPos = validPos
                     ST.LastTargetTime = now
                 end
             end
 
-            -- Set speed
             local lS = gNS()
             pcall(function()
                 local lhm = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
                 if lhm then lhm.WalkSpeed = lS end
             end)
 
-            -- ===== LOCK: INTERCEPT 12 STUDS AHEAD THEN LOCK PRECISELY =====
-            -- Full 3D tracking: follows target UP and DOWN at full speed
-            local LOCK_INTERCEPT_DIST = 12
-
-            -- Calculate target's FULL 3D velocity (including Y axis) for prediction
-            local fullVel = ST.PredictedVel  -- X, Y, Z all included
+            local LOCK_INTERCEPT_DIST = 18
+            local fullVel = ST.PredictedVel
             local horizVel = Vector3.new(fullVel.X, 0, fullVel.Z)
             local horizSpeed = horizVel.Magnitude
             local horizDir = horizSpeed > 1 and horizVel.Unit or Vector3.zero
 
-            -- Intercept point: 12 studs ahead on target's movement path (full 3D)
             local interceptPos = validPos + horizDir * LOCK_INTERCEPT_DIST
-            -- Include vertical prediction in intercept point
             local yVel = fullVel.Y
             if math.abs(yVel) > 1 then
                 interceptPos = Vector3.new(interceptPos.X, validPos.Y + yVel * 0.15, interceptPos.Z)
             end
 
-            -- Clamp intercept point to reasonable distance
             local distToIntercept = (interceptPos - h.Position).Magnitude
             if distToIntercept > ANTI_EXPLOIT.MAX_TELEPORT_DIST then
                 local dir = (interceptPos - h.Position).Unit
                 interceptPos = h.Position + dir * ANTI_EXPLOIT.MAX_TELEPORT_DIST
             end
 
-            -- Determine move target based on distance to intercept point
             local moveTarget
             local distToTarget = (validPos - h.Position).Magnitude
 
             if horizSpeed > 1 and distToIntercept > 3 then
-                -- Target is moving and we're not near intercept point yet
-                -- Phase 1: Rush to intercept point (12 studs ahead of target path)
                 moveTarget = interceptPos
             else
-                -- Target is stationary or we're already at intercept point
-                -- Phase 2: Lock precisely onto the target (full 3D including Y)
                 moveTarget = validPos
             end
 
-            -- Clamp final move target
             local distToMoveTarget = (moveTarget - h.Position).Magnitude
             if distToMoveTarget > ANTI_EXPLOIT.MAX_TELEPORT_DIST then
                 local dir = (moveTarget - h.Position).Unit
@@ -1449,18 +1416,15 @@ local function ProcessLockFrame(dt)
                 hV = toTarget.Unit * lS
             end
 
-            -- FULL 3D VELOCITY: includes Y axis so lock follows target up/down
             h.Velocity = hV
 
             pcall(function()
                 local a = h:FindFirstChild("LockAngVel")
                 if a then
-                    -- Always face the actual target, not the intercept point
                     local dCF = CFrame.lookAt(h.Position, validPos)
                     local rCF = h.CFrame:ToObjectSpace(dCF)
                     local ax, an = rCF:ToAxisAngle()
                     if an > 0.01 then
-                        -- FULL 360 ROTATION: no axis restriction, high torque
                         a.AngularVelocity = h.CFrame:VectorToWorldSpace(ax) * (an * 45)
                     else
                         a.AngularVelocity = Vector3.new(0, 0, 0)
@@ -1468,7 +1432,6 @@ local function ProcessLockFrame(dt)
                 end
             end)
 
-            -- Bat swing with cooldown
             ST.lockCD = ST.lockCD - dt
             if ST.lockCD <= 0 then
                 local tl = FindBat()
@@ -1478,7 +1441,6 @@ local function ProcessLockFrame(dt)
                 ST.lockCD = 0.08
             end
         else
-            -- Target dead or invalid
             h.Velocity = Vector3.new(0, h.Velocity.Y, 0)
             pcall(function()
                 local a = h:FindFirstChild("LockAngVel")
@@ -1540,10 +1502,7 @@ local function tLK()
     end
 end
 
--- ===== IMPROVED AUTO MOVE SYSTEM (Out Left Right) =====
--- Fixed: Continuous movement through intermediate points, only stop at last point
--- Fixed: No stopping at each waypoint, smooth continuous flow
-
+-- ===== AUTO MOVE SYSTEM =====
 local AutoMoveThread = nil
 
 local function StopAutoMove()
@@ -1586,7 +1545,6 @@ local function StartAutoMove(mode)
             end
 
             if pointIdx > lastPointIdx then
-                -- Reached the final point - STOP here
                 h.Velocity = Vector3.new(0, h.Velocity.Y, 0)
                 StopAutoMove()
                 return
@@ -1597,13 +1555,11 @@ local function StartAutoMove(mode)
             local targetPos = Vector3.new(tx, ty, tz)
             local toTarget = targetPos - h.Position
 
-            -- ===== STUCK DETECTION =====
             if ST.AutoMoveLastPos then
                 local moved = (h.Position - ST.AutoMoveLastPos).Magnitude
                 if moved < ANTI_EXPLOIT.STUCK_DIST_THRESHOLD then
                     ST.AutoMoveStuckTimer = ST.AutoMoveStuckTimer + 0.01
                     if ST.AutoMoveStuckTimer > ANTI_EXPLOIT.STUCK_TIMEOUT then
-                        -- Stuck - try jump to unstick
                         local hm = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
                         if hm then
                             pcall(function() hm:ChangeState(Enum.HumanoidStateType.Jumping) end)
@@ -1616,10 +1572,8 @@ local function StartAutoMove(mode)
             end
             ST.AutoMoveLastPos = h.Position
 
-            -- ===== PATH DEVIATION CHECK =====
             local pathDeviation = math.abs(h.Position.X - tx) + math.abs(h.Position.Z - tz)
             if pathDeviation > ANTI_EXPLOIT.PATH_DEVIATION_MAX then
-                -- Too far from path, correct towards waypoint
                 local correctionDir = (targetPos - h.Position).Unit
                 local correctionSpeed = (pointIdx >= 3) and gSS() or gNS()
                 h.Velocity = Vector3.new(
@@ -1631,19 +1585,15 @@ local function StartAutoMove(mode)
                 continue
             end
 
-            -- ===== PRECISE ARRIVAL CHECK: ZERO TOLERANCE X,Z, TOLERANCE Y =====
             local xzDist = Vector3.new(toTarget.X, 0, toTarget.Z).Magnitude
             local yDist = math.abs(toTarget.Y)
 
             if xzDist < AUTO_MOVE_XZ_TOLERANCE and yDist < AUTO_MOVE_Y_TOLERANCE then
-                -- Arrived at this waypoint (X,Z nearly exact, Y within tolerance)
                 if pointIdx >= lastPointIdx then
-                    -- This is the LAST point - STOP here
                     h.Velocity = Vector3.new(0, h.Velocity.Y, 0)
                     StopAutoMove()
                     return
                 else
-                    -- Intermediate point - DON'T STOP, immediately move to next point
                     local nextIdx = pointIdx + 1
                     if nextIdx <= lastPointIdx then
                         local nextCoord = coords[nextIdx]
@@ -1652,7 +1602,6 @@ local function StartAutoMove(mode)
                         local toNext = nextPos - h.Position
                         if toNext.Magnitude > 0.1 then
                             local nextDir = toNext.Unit
-                            -- Use steal speed for 3rd and 4th waypoints
                             local spd = (nextIdx >= 3) and gSS() or gNS()
                             h.Velocity = Vector3.new(
                                 nextDir.X * spd,
@@ -1664,8 +1613,6 @@ local function StartAutoMove(mode)
                     pointIdx = pointIdx + 1
                 end
             else
-                -- Move towards current waypoint continuously
-                -- Use steal speed for 3rd and 4th waypoints
                 local spd = (pointIdx >= 3) and gSS() or gNS()
                 local moveDir = Vector3.new(toTarget.X, 0, toTarget.Z).Unit
                 h.Velocity = Vector3.new(
@@ -2167,7 +2114,6 @@ local function ExecSteal(pr)
     end)
 end
 
--- Background steal loop
 task.spawn(function()
     while _G.ExtRunning and CoreActive do
         if ST.AutoStealOn and not ST.isStealing then
@@ -2178,7 +2124,6 @@ task.spawn(function()
     end
 end)
 
--- No-collide loop
 task.spawn(function()
     while _G.ExtRunning and CoreActive do
         for _, p in ipairs(Players:GetPlayers()) do
@@ -2192,12 +2137,11 @@ task.spawn(function()
     end
 end)
 
--- ===== WAYPOINT ESP (SMALL PARTS + BILLBOARD ONLY) =====
+-- ===== WAYPOINT ESP =====
 local WPParts = {}
 
 local function UpdateWaypointESP()
     pcall(function()
-        -- Only recreate if parts don't exist
         if #WPParts > 0 then
             local allAlive = true
             for _, wp in ipairs(WPParts) do
@@ -2209,7 +2153,6 @@ local function UpdateWaypointESP()
             if allAlive then return end
         end
 
-        -- Clear old parts
         WPParts = {}
         for _, obj in ipairs(ESPFolder:GetChildren()) do
             if obj.Name == "ExtWaypoint" then obj:Destroy() end
@@ -2218,10 +2161,8 @@ local function UpdateWaypointESP()
         local function createWaypointPart(coord, col, prefix)
             local cx, cy, cz = GetCoord(coord)
             if cx == 0 and cz == 0 then return end
-
             local espY = cy + WAYPOINT_HEIGHT_OFFSET
 
-            -- ===== SMALL PART (at exact coordinates + height offset) =====
             local wp = Instance.new("Part")
             wp.Name = "ExtWaypoint"
             wp.Size = Vector3.new(1, 1, 1)
@@ -2234,7 +2175,6 @@ local function UpdateWaypointESP()
             wp.Parent = ESPFolder
             table.insert(WPParts, wp)
 
-            -- ===== BILLBOARD GUI =====
             local bb = Instance.new("BillboardGui")
             bb.Name = "WP_UI"
             bb.Adornee = wp
@@ -2252,7 +2192,6 @@ local function UpdateWaypointESP()
             lbl.Size = UDim2.new(1, 0, 0.6, 0)
             lbl.Parent = bb
 
-            -- ===== COORDINATE SUB-LABEL =====
             local subLbl = Instance.new("TextLabel")
             subLbl.Text = string.format("%.1f, %.1f, %.1f", cx, cy, cz)
             subLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -2367,807 +2306,965 @@ local function BuildUI()
     LaggerGui.ResetOnSpawn = false
     LaggerGui.Parent = MainFolder
 
-local function MakePanelDrag(f, h)
-    local dr, di, ds, dp = false, nil, nil, nil
-    h.InputBegan:Connect(function(i)
-        if not ST.EditMode then return end
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            dr = true
-            ds = i.Position
-            dp = f.Position
-            i.Changed:Connect(function()
-                if i.UserInputState == Enum.UserInputState.End then dr = false end
-            end)
+    -- ===== ROBLOX-STYLE DRAG SYSTEM =====
+    -- Uses AbsolutePosition and AbsoluteSize for pixel-perfect dragging
+    -- Works with any screen size, scales properly
+    local function MakeRobloxDrag(f, dragHandle)
+        local dragging = false
+        local dragStart = nil
+        local startPos = nil
+        local dragConnection = nil
+        local dragInputConnection = nil
+
+        local function updateDrag(input)
+            if not dragging then return end
+            local delta = input.Position - dragStart
+            local newX = startPos.X.Offset + delta.X
+            local newY = startPos.Y.Offset + delta.Y
+            f.Position = UDim2.new(startPos.X.Scale, newX, startPos.Y.Scale, newY)
         end
-    end)
-    h.InputChanged:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
-            di = i
-        end
-    end)
-    UIS.InputChanged:Connect(function(i)
-        if i == di and dr then
-            local d = i.Position - ds
-            f.Position = UDim2.new(dp.X.Scale, dp.X.Offset + d.X, dp.Y.Scale, dp.Y.Offset + d.Y)
-        end
-    end)
-end
 
-local function MakeFloatBtn(parent, text, xPos, yPos, elemKey)
-    local sz = 72
-    local f = Instance.new("Frame")
-    f.Name = text
-    f.BackgroundColor3 = C.BG
-    f.BackgroundTransparency = 0.4
-    f.Size = UDim2.new(0, sz * SC, 0, sz * SC)
-    f.Position = UDim2.new(1, -(xPos + sz) * SC, 0.5, yPos * SC)
-    f.ZIndex = 2
-    f.Parent = parent
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 10)
-    local st = Instance.new("UIStroke")
-    st.Thickness = 2
-    st.Color = C.GRN
-    st.Parent = f
-    BorderGrad(st)
-    AddParticles(f, 5)
-    if elemKey then UIElements[elemKey] = f end
+        dragHandle.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = f.Position
 
-    local btn = Instance.new("TextButton")
-    btn.Name = "Btn"
-    btn.Text = text
-    btn.TextColor3 = C.TXT
-    btn.Font = Enum.Font.GothamBlack
-    btn.TextSize = 11 * SC
-    btn.BackgroundTransparency = 1
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.ZIndex = 5
-    btn.TextWrapped = true
-    btn.Parent = f
+                if dragConnection then dragConnection:Disconnect() end
+                local currentDragObj = nil
+                dragConnection = UIS.InputChanged:Connect(function(changedInput)
+                    if changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch then
+                        currentDragObj = changedInput
+                        updateDrag(changedInput)
+                    end
+                end)
 
-    local dr, di, ds, dp, wd = false, nil, nil, nil, false
-    btn.InputBegan:Connect(function(i)
-        if not ST.EditMode then return end
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            dr = true
-            ds = i.Position
-            dp = f.Position
-            wd = false
-            i.Changed:Connect(function()
-                if i.UserInputState == Enum.UserInputState.End then dr = false end
-            end)
-        end
-    end)
-    btn.InputChanged:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
-            di = i
-            if dr and ds and (i.Position - ds).Magnitude > 5 then wd = true end
-        end
-    end)
-    UIS.InputChanged:Connect(function(i)
-        if i == di and dr then
-            local d = i.Position - ds
-            f.Position = UDim2.new(dp.X.Scale, dp.X.Offset + d.X, dp.Y.Scale, dp.Y.Offset + d.Y)
-        end
-    end)
-    Hover(btn, C.HVR, C.BG)
-
-    local os_ = btn.Size
-    btn.MouseButton1Click:Connect(function()
-        if wd then wd = false return end
-        TweenService:Create(btn, TweenInfo.new(0.06), { Size = UDim2.new(os_.X.Scale, os_.X.Offset * 0.93, os_.Y.Scale, os_.Y.Offset * 0.93) }):Play()
-        task.delay(0.06, function()
-            if btn and btn.Parent then
-                TweenService:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Back), { Size = os_ }):Play()
-            end
-        end)
-    end)
-
-    task.spawn(function()
-        while btn and btn.Parent and CoreActive do
-            local isOn = btn:GetAttribute("On")
-            if isOn then
-                TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 3.5, Color = C.GRN_BRIGHT }):Play()
-                task.wait(0.6)
-                TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 2, Color = C.GRN }):Play()
-                task.wait(0.6)
-            else
-                TweenService:Create(st, TweenInfo.new(0.3), { Thickness = 1.5, Color = C.RED }):Play()
-                task.wait(0.4)
-            end
-        end
-    end)
-
-    return btn, f, st
-end
-
-local function MakeSysBtn(p, t, x, y, w, h)
-    local f = Instance.new("Frame")
-    f.Name = t
-    f.BackgroundColor3 = C.BG
-    f.BackgroundTransparency = 0.4
-    f.Size = UDim2.new(0, (w or 110) * SC, 0, (h or 36) * SC)
-    f.Position = UDim2.new(0, x * SC, 0, y * SC)
-    f.Parent = p
-    f.ZIndex = 5
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
-    local st = Instance.new("UIStroke")
-    st.Thickness = 2
-    st.Color = C.GRN
-    st.Parent = f
-    BorderGrad(st)
-    AddParticles(f, 3)
-
-    -- ===== 3D BUTTON TEXT =====
-    local btn = Instance.new("TextButton")
-    btn.Name = "Btn"
-    btn.Text = t
-    btn.TextColor3 = C.TXT
-    btn.Font = Enum.Font.GothamBlack
-    btn.TextSize = 10 * SC
-    btn.BackgroundTransparency = 1
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.ZIndex = 6
-    btn.Parent = f
-    Hover(btn, C.HVR, C.BG)
-    ClkFX(btn)
-
-    task.spawn(function()
-        while btn and btn.Parent and CoreActive do
-            local isOn = btn:GetAttribute("On")
-            if isOn then
-                TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 3.5, Color = C.GRN_BRIGHT }):Play()
-                task.wait(0.6)
-                TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 2, Color = C.GRN }):Play()
-                task.wait(0.6)
-            else
-                TweenService:Create(st, TweenInfo.new(0.3), { Thickness = 1.5, Color = C.RED }):Play()
-                task.wait(0.4)
-            end
-        end
-    end)
-
-    return btn, f, st
-end
-
-local function MakePanel(p, t, x, y, w, h, m, k)
-    local f = Instance.new("Frame")
-    f.Name = t
-    f.BackgroundColor3 = C.BG
-    f.BackgroundTransparency = 0.3
-    f.Size = UDim2.new(0, (w or 220) * SC, 0, (h or 220) * SC)
-    f.Position = UDim2.new(0, x * SC, 0, y * SC)
-    f.ZIndex = 2
-    f.Parent = p
-    f.ClipsDescendants = true
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 10)
-    local st = Instance.new("UIStroke")
-    st.Thickness = 2
-    st.Color = C.GRN
-    st.Parent = f
-    BorderGrad(st)
-    AddParticles(f, 6)
-    if k then UIElements[k] = f end
-
-    -- ===== 3D TITLE =====
-    local tl = Instance.new("TextLabel")
-    tl.Name = "PanelTitle"
-    tl.Text = t
-    tl.TextColor3 = C.GRN
-    tl.Font = Enum.Font.GothamBlack
-    tl.TextSize = 13 * SC
-    tl.BackgroundTransparency = 1
-    tl.Size = UDim2.new(0.7, 0, 0, 20 * SC)
-    tl.Position = UDim2.new(0, 8 * SC, 0, 4 * SC)
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-    tl.ZIndex = 10
-    tl.Parent = f
-
-    local dh = Instance.new("Frame")
-    dh.Name = "DragHandle"
-    dh.BackgroundTransparency = 1
-    dh.Size = UDim2.new(1, 0, 0, 22 * SC)
-    dh.Position = UDim2.new(0, 0, 0, 0)
-    dh.ZIndex = 20
-    dh.Parent = f
-    MakePanelDrag(f, dh)
-
-    local mb = nil
-    if m then
-        mb = Instance.new("TextButton")
-        mb.Text = "-"
-        mb.TextColor3 = C.GRN
-        mb.Font = Enum.Font.GothamBlack
-        mb.TextSize = 18 * SC
-        mb.BackgroundTransparency = 1
-        mb.Size = UDim2.new(0, 24 * SC, 0, 24 * SC)
-        mb.Position = UDim2.new(1, -28 * SC, 0, 1 * SC)
-        mb.ZIndex = 25
-        mb.Parent = f
-        Hover(mb)
-    end
-
-    return f, mb
-end
-
--- ===== CREATE FLOAT BUTTONS =====
-local FB = {}
-FB.AR = MakeFloatBtn(MainGui, L("auto_right"), 15, -(72 + 6) * 0.5, "FloatAutoRight")
-FB.AL = MakeFloatBtn(MainGui, L("auto_left"), 15 + 72 + 6, -(72 + 6) * 0.5, "FloatAutoLeft")
-FB.Drop = MakeFloatBtn(MainGui, L("drop"), 15, (72 + 6) * 0.5, "FloatDrop")
-FB.TPD = MakeFloatBtn(MainGui, L("tpdown"), 15 + 72 + 6, (72 + 6) * 0.5, "FloatTPDown")
-FB.Mode = MakeFloatBtn(MainGui, L("mode_toggle"), 15, (72 + 6) * 1.5, "FloatMode")
-FB.Lock = MakeFloatBtn(MainGui, L("lock"), 15 + 72 + 6, (72 + 6) * 1.5, "FloatLock")
-FB.IRS = MakeFloatBtn(MainGui, L("instarst"), 15, (72 + 6) * 2.5, "FloatInstaReset")
-
--- ===== SETTINGS PANEL =====
-local P2, P2Min = MakePanel(MainGui, L("spd_chg"), 20, 260, 320, 330, true, "SpeedPanel")
-
--- Remove glow effects from settings panel (no moving gradient, no particles)
-pcall(function()
-    for _, child in ipairs(P2:GetChildren()) do
-        if child.Name == "Particles" then child:Destroy() end
-        if child:IsA("UIStroke") then
-            -- Remove moving gradient child from the stroke
-            for _, sc in ipairs(child:GetChildren()) do
-                if sc:IsA("UIGradient") then sc:Destroy() end
-            end
-            child:Destroy()
-        end
-    end
-    -- Add plain static stroke
-    local ns = Instance.new("UIStroke")
-    ns.Thickness = 1.5
-    ns.Color = C.GRN
-    ns.Parent = P2
-end)
-
-local ModeLabel = Instance.new("TextLabel")
-ModeLabel.Text = L("mode") .. ": " .. L(ST.SpdMode:lower())
-ModeLabel.TextColor3 = C.GRN
-ModeLabel.Font = Enum.Font.GothamBlack
-ModeLabel.TextSize = 15 * SC
-ModeLabel.BackgroundTransparency = 1
-ModeLabel.Size = UDim2.new(1, 0, 0, 26 * SC)
-ModeLabel.Position = UDim2.new(0, 8 * SC, 0, 22 * SC)
-ModeLabel.TextXAlignment = Enum.TextXAlignment.Left
-ModeLabel.ZIndex = 10
-ModeLabel.Parent = P2
-
-local function MakeSpdInput(lbl, def, y, max, sk)
-    local l = Instance.new("TextLabel")
-    l.Name = "Lbl_" .. lbl
-    l.Text = lbl
-    l.TextColor3 = C.TXT
-    l.Font = Enum.Font.GothamBold
-    l.TextSize = 10 * SC
-    l.BackgroundTransparency = 1
-    l.Size = UDim2.new(0.55, 0, 0, 20 * SC)
-    l.Position = UDim2.new(0, 8 * SC, 0, y * SC)
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.ZIndex = 10
-    l.Parent = P2
-
-    local sv = nil
-    if _LoadedSave.Speeds and _LoadedSave.Speeds[sk] then
-        sv = _LoadedSave.Speeds[sk]
-    end
-
-    local bx = Instance.new("TextBox")
-    bx.Text = tostring(sv or def)
-    bx.TextColor3 = C.TXT
-    bx.Font = Enum.Font.GothamBold
-    bx.TextSize = 12 * SC
-    bx.BackgroundColor3 = C.DRK
-    bx.Size = UDim2.new(0, 90 * SC, 0, 20 * SC)
-    bx.Position = UDim2.new(1, -100 * SC, 0, y * SC)
-    bx.ZIndex = 10
-    bx.Parent = P2
-    bx.ClearTextOnFocus = false
-    Instance.new("UICorner", bx).CornerRadius = UDim.new(0, 5)
-    local bs = Instance.new("UIStroke")
-    bs.Thickness = 1
-    bs.Color = C.GRN
-    bs.Parent = bx
-
-    -- ===== VALIDATE ON FOCUS LOST =====
-    bx.FocusLost:Connect(function()
-        local n = tonumber(bx.Text)
-        if not n then
-            bx.Text = tostring(sv or def)
-        else
-            if n > max then
-                bx.Text = tostring(max)
-                Notify("EXTERNAL HUB", L("warn_max"), 2, C.RED)
-            elseif n < 0 then
-                bx.Text = "0"
-            else
-                bx.Text = tostring(math.clamp(n, 0, max))
-            end
-        end
-        -- Save immediately on change
-        SaveSave()
-    end)
-
-    -- ===== ALSO VALIDATE ON EVERY CHANGE (while typing) =====
-    bx:GetPropertyChangedSignal("Text"):Connect(function()
-        local txt = bx.Text
-        if txt == "" then return end
-        local n = tonumber(txt)
-        if n and n > max then
-            bx.TextColor3 = C.RED
-        elseif n and n >= 0 then
-            bx.TextColor3 = C.TXT
-        else
-            bx.TextColor3 = C.RED
-        end
-    end)
-
-    return bx, l
-end
-
-BX.N, BXLabels.N = MakeSpdInput(L("n_spd"), 58, 50, LIMITS.MAX_NORMAL_SPD, "NormalSpeed")
-BX.S, BXLabels.S = MakeSpdInput(L("s_spd"), 28, 76, LIMITS.MAX_STEAL_SPD, "StealSpeed")
-BX.J, BXLabels.J = MakeSpdInput(L("j_pwr"), LIMITS.NORMAL_JUMP, 102, LIMITS.MAX_JUMP_PWR, "JumpPower")
-BX.TPD, BXLabels.TPD = MakeSpdInput(L("tpd_h"), 6, 128, LIMITS.MAX_TPD_H, "TPDownHeight")
-BX.LN, BXLabels.LN = MakeSpdInput(L("l_n_spd"), LIMITS.LAG_NORMAL_SPD, 154, LIMITS.MAX_NORMAL_SPD, "LaggerNormalSpeed")
-BX.LS, BXLabels.LS = MakeSpdInput(L("l_s_spd"), LIMITS.LAG_STEAL_SPD, 180, LIMITS.MAX_STEAL_SPD, "LaggerStealSpeed")
-
-Sep1 = Instance.new("Frame")
-Sep1.Size = UDim2.new(0.9, 0, 0, 1)
-Sep1.Position = UDim2.new(0.05, 0, 0, 206 * SC)
-Sep1.BackgroundColor3 = C.GRN
-Sep1.BackgroundTransparency = 0.5
-Sep1.BorderSizePixel = 0
-Sep1.ZIndex = 10
-Sep1.Parent = P2
-
-HKTitle = Instance.new("TextLabel")
-HKTitle.Text = L("hk_info")
-HKTitle.TextColor3 = C.DIM
-HKTitle.Font = Enum.Font.Gotham
-HKTitle.TextSize = 9 * SC
-HKTitle.BackgroundTransparency = 1
-HKTitle.Size = UDim2.new(1, -16 * SC, 0, 16 * SC)
-HKTitle.Position = UDim2.new(0, 8 * SC, 0, 216 * SC)
-HKTitle.TextXAlignment = Enum.TextXAlignment.Left
-HKTitle.TextWrapped = true
-HKTitle.ZIndex = 10
-HKTitle.Parent = P2
-
--- ===== HOTKEY CONFIG =====
-HotkeyConfig = {
-    { btn = FB.AR, name = L("auto_right"), default = Enum.KeyCode.R, saveName = "HotkeyAutoRight" },
-    { btn = FB.AL, name = L("auto_left"), default = Enum.KeyCode.Q, saveName = "HotkeyAutoLeft" },
-    { btn = FB.Drop, name = L("hk_drop"), default = Enum.KeyCode.V, saveName = "HotkeyDrop" },
-    { btn = FB.TPD, name = L("hk_tpd"), default = Enum.KeyCode.T, saveName = "HotkeyTPDown" },
-    { btn = FB.Mode, name = L("hk_mode"), default = Enum.KeyCode.F, saveName = "HotkeyMode" },
-    { btn = FB.Lock, name = L("hk_lock"), default = Enum.KeyCode.E, saveName = "HotkeyLock" },
-    { btn = FB.IRS, name = L("hk_ir"), default = Enum.KeyCode.Z, saveName = "HotkeyInstaReset" },
-}
-
-local HKFrames = {}
-for i, cfg in ipairs(HotkeyConfig) do
-    local isR = (i % 2 == 0)
-    local rIdx = math.ceil(i / 2)
-    local xP = isR and 165 or 5
-    local yP = 238 + ((rIdx - 1) * 22)
-
-    local row = Instance.new("Frame")
-    row.Name = "HKRow"
-    row.BackgroundColor3 = C.BG
-    row.BackgroundTransparency = 0.5
-    row.Size = UDim2.new(0, 148 * SC, 0, 18 * SC)
-    row.Position = UDim2.new(0, xP * SC, 0, yP * SC)
-    row.ZIndex = 10
-    row.Parent = P2
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-    local rowSt = Instance.new("UIStroke")
-    rowSt.Thickness = 1
-    rowSt.Color = C.GRN
-    rowSt.Transparency = 0.3
-    rowSt.Parent = row
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Name = "HKLabel"
-    lbl.Text = cfg.name
-    lbl.TextColor3 = C.TXT
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 8 * SC
-    lbl.BackgroundTransparency = 1
-    lbl.Size = UDim2.new(0.55, 0, 1, 0)
-    lbl.Position = UDim2.new(0, 4 * SC, 0, 0)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.ZIndex = 11
-    lbl.Parent = row
-
-    local keyBtn = Instance.new("TextButton")
-    keyBtn.Text = cfg.default.Name
-    keyBtn.TextColor3 = C.BG
-    keyBtn.Font = Enum.Font.GothamBlack
-    keyBtn.TextSize = 8 * SC
-    keyBtn.BackgroundColor3 = C.GRN
-    keyBtn.Size = UDim2.new(0, 42 * SC, 0, 12 * SC)
-    keyBtn.Position = UDim2.new(1, -48 * SC, 0.5, -6 * SC)
-    keyBtn.ZIndex = 12
-    keyBtn.Parent = row
-    Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 4)
-
-    cfg.key = cfg.default
-    cfg.keyBtn = keyBtn
-    table.insert(HKFrames, { frame = row, stroke = rowSt, label = lbl })
-
-    -- No pulsing border animation - plain static stroke for clean look
-
-    keyBtn.MouseButton1Click:Connect(function()
-        keyBtn.Text = "..."
-        local cap = false
-        local conn
-        conn = UIS.InputBegan:Connect(function(input, gpe)
-            if gpe then return end
-            if input.KeyCode ~= nil and input.KeyCode ~= Enum.KeyCode.Unknown then
-                cap = true
-                cfg.key = input.KeyCode
-                keyBtn.Text = input.KeyCode.Name
-                ST.justBound = true
-                ST.justBoundKey = input.KeyCode
-                if conn then conn:Disconnect() end
-                task.delay(0.3, function()
-                    ST.justBound = false
-                    ST.justBoundKey = nil
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                        if dragConnection then
+                            dragConnection:Disconnect()
+                            dragConnection = nil
+                        end
+                    end
                 end)
             end
         end)
-        task.delay(5, function()
-            if not cap then
-                keyBtn.Text = cfg.key.Name
-                if conn then conn:Disconnect() end
+
+        dragHandle.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInputConnection = input
             end
         end)
-    end)
-end
+    end
 
-if _LoadedSave.Hotkeys then
-    for _, cfg in ipairs(HotkeyConfig) do
-        if cfg.saveName and _LoadedSave.Hotkeys[cfg.saveName] then
-            local kName = _LoadedSave.Hotkeys[cfg.saveName]
-            local kCode = Enum.KeyCode[kName]
-            if kCode then
-                cfg.key = kCode
-                if cfg.keyBtn then cfg.keyBtn.Text = kCode.Name end
+    -- ===== ROBLOX-STYLE FLOAT BUTTON =====
+    -- Fixed position on screen, scales with device but stays in place
+    local function MakeFloatBtn(parent, text, anchorX, anchorY, posX, posY, size, elemKey)
+        local sz = size or 72
+        local f = Instance.new("Frame")
+        f.Name = text
+        f.BackgroundColor3 = C.BG
+        f.BackgroundTransparency = 0.4
+        f.Size = UDim2.new(0, sz * SC, 0, sz * SC)
+        f.Position = UDim2.new(anchorX, posX * SC, anchorY, posY * SC)
+        f.ZIndex = 2
+        f.Parent = parent
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 10)
+        local st = Instance.new("UIStroke")
+        st.Thickness = 2
+        st.Color = C.GRN
+        st.Parent = f
+        BorderGrad(st)
+        AddParticles(f, 5)
+        if elemKey then UIElements[elemKey] = f end
+
+        local btn = Instance.new("TextButton")
+        btn.Name = "Btn"
+        btn.Text = text
+        btn.TextColor3 = C.TXT
+        btn.Font = Enum.Font.GothamBlack
+        btn.TextSize = 11 * SC
+        btn.BackgroundTransparency = 1
+        btn.Size = UDim2.new(1, 0, 1, 0)
+        btn.ZIndex = 5
+        btn.TextWrapped = true
+        btn.Parent = f
+
+        -- Roblox-style drag for this button
+        local dragHandle = Instance.new("TextButton")
+        dragHandle.Name = "DragHandle"
+        dragHandle.Text = "⋮⋮"
+        dragHandle.TextColor3 = C.DIM
+        dragHandle.Font = Enum.Font.GothamBold
+        dragHandle.TextSize = 8 * SC
+        dragHandle.BackgroundTransparency = 1
+        dragHandle.Size = UDim2.new(0, 20 * SC, 0, 14 * SC)
+        dragHandle.Position = UDim2.new(0.5, -10 * SC, 0, 2 * SC)
+        dragHandle.ZIndex = 6
+        dragHandle.Parent = f
+        MakeRobloxDrag(f, dragHandle)
+
+        Hover(btn, C.HVR, C.BG)
+        ClkFX(btn)
+
+        task.spawn(function()
+            while btn and btn.Parent and CoreActive do
+                local isOn = btn:GetAttribute("On")
+                if isOn then
+                    TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 3.5, Color = C.GRN_BRIGHT }):Play()
+                    task.wait(0.6)
+                    TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 2, Color = C.GRN }):Play()
+                    task.wait(0.6)
+                else
+                    TweenService:Create(st, TweenInfo.new(0.3), { Thickness = 1.5, Color = C.RED }):Play()
+                    task.wait(0.4)
+                end
+            end
+        end)
+
+        return btn, f, st
+    end
+
+    -- ===== SYSTEM BUTTON =====
+    local function MakeSysBtn(p, t, x, y, w, h, elemKey)
+        local f = Instance.new("Frame")
+        f.Name = t
+        f.BackgroundColor3 = C.BG
+        f.BackgroundTransparency = 0.4
+        f.Size = UDim2.new(0, (w or 110) * SC, 0, (h or 36) * SC)
+        f.Position = UDim2.new(0, x * SC, 0, y * SC)
+        f.Parent = p
+        f.ZIndex = 5
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
+        local st = Instance.new("UIStroke")
+        st.Thickness = 2
+        st.Color = C.GRN
+        st.Parent = f
+        BorderGrad(st)
+        AddParticles(f, 3)
+        if elemKey then UIElements[elemKey] = f end
+
+        local btn = Instance.new("TextButton")
+        btn.Name = "Btn"
+        btn.Text = t
+        btn.TextColor3 = C.TXT
+        btn.Font = Enum.Font.GothamBlack
+        btn.TextSize = 10 * SC
+        btn.BackgroundTransparency = 1
+        btn.Size = UDim2.new(1, 0, 1, 0)
+        btn.ZIndex = 6
+        btn.Parent = f
+        Hover(btn, C.HVR, C.BG)
+        ClkFX(btn)
+
+        task.spawn(function()
+            while btn and btn.Parent and CoreActive do
+                local isOn = btn:GetAttribute("On")
+                if isOn then
+                    TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 3.5, Color = C.GRN_BRIGHT }):Play()
+                    task.wait(0.6)
+                    TweenService:Create(st, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Thickness = 2, Color = C.GRN }):Play()
+                    task.wait(0.6)
+                else
+                    TweenService:Create(st, TweenInfo.new(0.3), { Thickness = 1.5, Color = C.RED }):Play()
+                    task.wait(0.4)
+                end
+            end
+        end)
+
+        return btn, f, st
+    end
+
+    -- ===== PANEL WITH ROBLOX DRAG =====
+    local function MakePanel(p, t, x, y, w, h, m, k)
+        local f = Instance.new("Frame")
+        f.Name = t
+        f.BackgroundColor3 = C.BG
+        f.BackgroundTransparency = 0.3
+        f.Size = UDim2.new(0, (w or 220) * SC, 0, (h or 220) * SC)
+        f.Position = UDim2.new(0, x * SC, 0, y * SC)
+        f.ZIndex = 2
+        f.Parent = p
+        f.ClipsDescendants = true
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 10)
+        local st = Instance.new("UIStroke")
+        st.Thickness = 2
+        st.Color = C.GRN
+        st.Parent = f
+        BorderGrad(st)
+        AddParticles(f, 6)
+        if k then UIElements[k] = f end
+
+        local tl = Instance.new("TextLabel")
+        tl.Name = "PanelTitle"
+        tl.Text = t
+        tl.TextColor3 = C.GRN
+        tl.Font = Enum.Font.GothamBlack
+        tl.TextSize = 13 * SC
+        tl.BackgroundTransparency = 1
+        tl.Size = UDim2.new(0.7, 0, 0, 20 * SC)
+        tl.Position = UDim2.new(0, 8 * SC, 0, 4 * SC)
+        tl.TextXAlignment = Enum.TextXAlignment.Left
+        tl.ZIndex = 10
+        tl.Parent = f
+
+        local dh = Instance.new("Frame")
+        dh.Name = "DragHandle"
+        dh.BackgroundTransparency = 1
+        dh.Size = UDim2.new(1, 0, 0, 22 * SC)
+        dh.Position = UDim2.new(0, 0, 0, 0)
+        dh.ZIndex = 20
+        dh.Parent = f
+        MakeRobloxDrag(f, dh)
+
+        local mb = nil
+        if m then
+            mb = Instance.new("TextButton")
+            mb.Text = "-"
+            mb.TextColor3 = C.GRN
+            mb.Font = Enum.Font.GothamBlack
+            mb.TextSize = 18 * SC
+            mb.BackgroundTransparency = 1
+            mb.Size = UDim2.new(0, 24 * SC, 0, 24 * SC)
+            mb.Position = UDim2.new(1, -28 * SC, 0, 1 * SC)
+            mb.ZIndex = 25
+            mb.Parent = f
+            Hover(mb)
+        end
+
+        return f, mb
+    end
+
+    -- ===== CREATE FLOAT BUTTONS (RIGHT SIDE) =====
+    local FB = {}
+    -- Right side floating buttons - fixed positions that scale
+    -- RIGHT SIDE FLOAT BUTTONS - 2 columns, properly spaced
+    -- Column 1 (rightmost): x = -(15 + 72) = -87
+    -- Column 2: x = -(15 + 72 + 6 + 72) = -165
+    -- Row spacing: y starts at 0.3, each row +78
+    FB.AR = MakeFloatBtn(MainGui, L("auto_right"), 1, 0.3, -(15 + 72), 0, 72, "FloatAutoRight")
+    FB.AL = MakeFloatBtn(MainGui, L("auto_left"), 1, 0.3, -(15 + 72 + 6 + 72), 0, 72, "FloatAutoLeft")
+    FB.Drop = MakeFloatBtn(MainGui, L("drop"), 1, 0.3, -(15 + 72), 78, 72, "FloatDrop")
+    FB.TPD = MakeFloatBtn(MainGui, L("tpdown"), 1, 0.3, -(15 + 72 + 6 + 72), 78, 72, "FloatTPDown")
+    FB.Mode = MakeFloatBtn(MainGui, L("mode_toggle"), 1, 0.3, -(15 + 72), 156, 72, "FloatMode")
+    FB.Lock = MakeFloatBtn(MainGui, L("lock"), 1, 0.3, -(15 + 72 + 6 + 72), 156, 72, "FloatLock")
+    FB.IRS = MakeFloatBtn(MainGui, L("instarst"), 1, 0.3, -(15 + 72), 234, 72, "FloatInstaReset")
+
+    -- ===== SETTINGS PANEL =====
+    local P2, P2Min = MakePanel(MainGui, L("spd_chg"), 20, 260, 320, 330, true, "SpeedPanel")
+
+    pcall(function()
+        for _, child in ipairs(P2:GetChildren()) do
+            if child.Name == "Particles" then child:Destroy() end
+            if child:IsA("UIStroke") then
+                for _, sc in ipairs(child:GetChildren()) do
+                    if sc:IsA("UIGradient") then sc:Destroy() end
+                end
+                child:Destroy()
+            end
+        end
+        local ns = Instance.new("UIStroke")
+        ns.Thickness = 1.5
+        ns.Color = C.GRN
+        ns.Parent = P2
+    end)
+
+    local ModeLabel = Instance.new("TextLabel")
+    ModeLabel.Text = L("mode") .. ": " .. L(ST.SpdMode:lower())
+    ModeLabel.TextColor3 = C.GRN
+    ModeLabel.Font = Enum.Font.GothamBlack
+    ModeLabel.TextSize = 15 * SC
+    ModeLabel.BackgroundTransparency = 1
+    ModeLabel.Size = UDim2.new(1, 0, 0, 26 * SC)
+    ModeLabel.Position = UDim2.new(0, 8 * SC, 0, 22 * SC)
+    ModeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    ModeLabel.ZIndex = 10
+    ModeLabel.Parent = P2
+
+    local function MakeSpdInput(lbl, def, y, max, sk)
+        local l = Instance.new("TextLabel")
+        l.Name = "Lbl_" .. lbl
+        l.Text = lbl
+        l.TextColor3 = C.TXT
+        l.Font = Enum.Font.GothamBold
+        l.TextSize = 10 * SC
+        l.BackgroundTransparency = 1
+        l.Size = UDim2.new(0.55, 0, 0, 20 * SC)
+        l.Position = UDim2.new(0, 8 * SC, 0, y * SC)
+        l.TextXAlignment = Enum.TextXAlignment.Left
+        l.ZIndex = 10
+        l.Parent = P2
+
+        local sv = nil
+        if _LoadedSave.Speeds and _LoadedSave.Speeds[sk] then
+            sv = _LoadedSave.Speeds[sk]
+        end
+
+        local bx = Instance.new("TextBox")
+        bx.Text = tostring(sv or def)
+        bx.TextColor3 = C.TXT
+        bx.Font = Enum.Font.GothamBold
+        bx.TextSize = 12 * SC
+        bx.BackgroundColor3 = C.DRK
+        bx.Size = UDim2.new(0, 90 * SC, 0, 20 * SC)
+        bx.Position = UDim2.new(1, -100 * SC, 0, y * SC)
+        bx.ZIndex = 10
+        bx.Parent = P2
+        bx.ClearTextOnFocus = false
+        Instance.new("UICorner", bx).CornerRadius = UDim.new(0, 5)
+        local bs = Instance.new("UIStroke")
+        bs.Thickness = 1
+        bs.Color = C.GRN
+        bs.Parent = bx
+
+        bx.FocusLost:Connect(function()
+            local n = tonumber(bx.Text)
+            if not n then
+                bx.Text = tostring(sv or def)
+            else
+                if n > max then
+                    bx.Text = tostring(max)
+                    Notify("EXTERNAL HUB", L("warn_max"), 2, C.RED)
+                elseif n < 0 then
+                    bx.Text = "0"
+                else
+                    bx.Text = tostring(math.clamp(n, 0, max))
+                end
+            end
+            SaveSave()
+        end)
+
+        bx:GetPropertyChangedSignal("Text"):Connect(function()
+            local txt = bx.Text
+            if txt == "" then return end
+            local n = tonumber(txt)
+            if n and n > max then
+                bx.TextColor3 = C.RED
+            elseif n and n >= 0 then
+                bx.TextColor3 = C.TXT
+            else
+                bx.TextColor3 = C.RED
+            end
+        end)
+
+        return bx, l
+    end
+
+    BX.N, BXLabels.N = MakeSpdInput(L("n_spd"), 58, 50, LIMITS.MAX_NORMAL_SPD, "NormalSpeed")
+    BX.S, BXLabels.S = MakeSpdInput(L("s_spd"), 28, 76, LIMITS.MAX_STEAL_SPD, "StealSpeed")
+    BX.J, BXLabels.J = MakeSpdInput(L("j_pwr"), LIMITS.NORMAL_JUMP, 102, LIMITS.MAX_JUMP_PWR, "JumpPower")
+    BX.TPD, BXLabels.TPD = MakeSpdInput(L("tpd_h"), 6, 128, LIMITS.MAX_TPD_H, "TPDownHeight")
+    BX.LN, BXLabels.LN = MakeSpdInput(L("l_n_spd"), LIMITS.LAG_NORMAL_SPD, 154, LIMITS.MAX_NORMAL_SPD, "LaggerNormalSpeed")
+    BX.LS, BXLabels.LS = MakeSpdInput(L("l_s_spd"), LIMITS.LAG_STEAL_SPD, 180, LIMITS.MAX_STEAL_SPD, "LaggerStealSpeed")
+
+    Sep1 = Instance.new("Frame")
+    Sep1.Size = UDim2.new(0.9, 0, 0, 1)
+    Sep1.Position = UDim2.new(0.05, 0, 0, 206 * SC)
+    Sep1.BackgroundColor3 = C.GRN
+    Sep1.BackgroundTransparency = 0.5
+    Sep1.BorderSizePixel = 0
+    Sep1.ZIndex = 10
+    Sep1.Parent = P2
+
+    HKTitle = Instance.new("TextLabel")
+    HKTitle.Text = L("hk_info")
+    HKTitle.TextColor3 = C.DIM
+    HKTitle.Font = Enum.Font.Gotham
+    HKTitle.TextSize = 9 * SC
+    HKTitle.BackgroundTransparency = 1
+    HKTitle.Size = UDim2.new(1, -16 * SC, 0, 16 * SC)
+    HKTitle.Position = UDim2.new(0, 8 * SC, 0, 216 * SC)
+    HKTitle.TextXAlignment = Enum.TextXAlignment.Left
+    HKTitle.TextWrapped = true
+    HKTitle.ZIndex = 10
+    HKTitle.Parent = P2
+
+    -- ===== HOTKEY CONFIG =====
+    HotkeyConfig = {
+        { btn = FB.AR, name = L("auto_right"), default = Enum.KeyCode.R, saveName = "HotkeyAutoRight" },
+        { btn = FB.AL, name = L("auto_left"), default = Enum.KeyCode.Q, saveName = "HotkeyAutoLeft" },
+        { btn = FB.Drop, name = L("hk_drop"), default = Enum.KeyCode.V, saveName = "HotkeyDrop" },
+        { btn = FB.TPD, name = L("hk_tpd"), default = Enum.KeyCode.T, saveName = "HotkeyTPDown" },
+        { btn = FB.Mode, name = L("hk_mode"), default = Enum.KeyCode.F, saveName = "HotkeyMode" },
+        { btn = FB.Lock, name = L("hk_lock"), default = Enum.KeyCode.E, saveName = "HotkeyLock" },
+        { btn = FB.IRS, name = L("hk_ir"), default = Enum.KeyCode.Z, saveName = "HotkeyInstaReset" },
+    }
+
+    local HKFrames = {}
+    for i, cfg in ipairs(HotkeyConfig) do
+        local isR = (i % 2 == 0)
+        local rIdx = math.ceil(i / 2)
+        local xP = isR and 165 or 5
+        local yP = 238 + ((rIdx - 1) * 22)
+
+        local row = Instance.new("Frame")
+        row.Name = "HKRow"
+        row.BackgroundColor3 = C.BG
+        row.BackgroundTransparency = 0.5
+        row.Size = UDim2.new(0, 148 * SC, 0, 18 * SC)
+        row.Position = UDim2.new(0, xP * SC, 0, yP * SC)
+        row.ZIndex = 10
+        row.Parent = P2
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+        local rowSt = Instance.new("UIStroke")
+        rowSt.Thickness = 1
+        rowSt.Color = C.GRN
+        rowSt.Transparency = 0.3
+        rowSt.Parent = row
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Name = "HKLabel"
+        lbl.Text = cfg.name
+        lbl.TextColor3 = C.TXT
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 8 * SC
+        lbl.BackgroundTransparency = 1
+        lbl.Size = UDim2.new(0.55, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 4 * SC, 0, 0)
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.ZIndex = 11
+        lbl.Parent = row
+
+        local keyBtn = Instance.new("TextButton")
+        keyBtn.Text = cfg.default.Name
+        keyBtn.TextColor3 = C.BG
+        keyBtn.Font = Enum.Font.GothamBlack
+        keyBtn.TextSize = 8 * SC
+        keyBtn.BackgroundColor3 = C.GRN
+        keyBtn.Size = UDim2.new(0, 42 * SC, 0, 12 * SC)
+        keyBtn.Position = UDim2.new(1, -48 * SC, 0.5, -6 * SC)
+        keyBtn.ZIndex = 12
+        keyBtn.Parent = row
+        Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 4)
+
+        cfg.key = cfg.default
+        cfg.keyBtn = keyBtn
+        table.insert(HKFrames, { frame = row, stroke = rowSt, label = lbl })
+
+        keyBtn.MouseButton1Click:Connect(function()
+            keyBtn.Text = "..."
+            local cap = false
+            local conn
+            conn = UIS.InputBegan:Connect(function(input, gpe)
+                if gpe then return end
+                if input.KeyCode ~= nil and input.KeyCode ~= Enum.KeyCode.Unknown then
+                    cap = true
+                    cfg.key = input.KeyCode
+                    keyBtn.Text = input.KeyCode.Name
+                    ST.justBound = true
+                    ST.justBoundKey = input.KeyCode
+                    if conn then conn:Disconnect() end
+                    task.delay(0.3, function()
+                        ST.justBound = false
+                        ST.justBoundKey = nil
+                    end)
+                end
+            end)
+            task.delay(5, function()
+                if not cap then
+                    keyBtn.Text = cfg.key.Name
+                    if conn then conn:Disconnect() end
+                end
+            end)
+        end)
+    end
+
+    if _LoadedSave.Hotkeys then
+        for _, cfg in ipairs(HotkeyConfig) do
+            if cfg.saveName and _LoadedSave.Hotkeys[cfg.saveName] then
+                local kName = _LoadedSave.Hotkeys[cfg.saveName]
+                local kCode = Enum.KeyCode[kName]
+                if kCode then
+                    cfg.key = kCode
+                    if cfg.keyBtn then cfg.keyBtn.Text = kCode.Name end
+                end
             end
         end
     end
-end
 
--- ===== FORCE RESTORE ALL SAVE DATA AFTER UI IS BUILT =====
-RestoreTextBoxValues()
-RestoreKeybinds()
-if _LoadedSave.Mode then
-    ST.SpdMode = _LoadedSave.Mode
-end
-
--- ===== PANEL MINIMIZE =====
-ST.P2Min = false
-P2Min.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
-    ST.P2Min = not ST.P2Min
-    P2Min.Text = ST.P2Min and "+" or "-"
-    TweenService:Create(P2, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
-        Size = ST.P2Min and UDim2.new(0, 320 * SC, 0, 26 * SC) or UDim2.new(0, 320 * SC, 0, 330 * SC),
-    }):Play()
-end)
-
--- ===== CONTROLS PANEL =====
-local P3, P3Min = MakePanel(MainGui, L("controls"), 355, 260, 220, 295, true, "ControlsPanel")
-local SB = {}
-SB.Spd = MakeSysBtn(P3, L("speed"), 10, 32, 95, 36)
-SB.IJ = MakeSysBtn(P3, L("infjump"), 115, 32, 95, 36)
-SB.Bat = MakeSysBtn(P3, L("batcnt"), 10, 76, 95, 36)
-SB.Med = MakeSysBtn(P3, L("medcnt"), 115, 76, 95, 36)
-SB.Rag = MakeSysBtn(P3, L("antirag"), 10, 120, 95, 36)
-SB.ATPD = MakeSysBtn(P3, L("autotpd"), 115, 120, 95, 36)
-SB.Lag = MakeSysBtn(P3, L("antilag"), 10, 164, 95, 36)
-SB.FP = MakeSysBtn(P3, L("fpsboost"), 115, 164, 95, 36)
-
--- ===== MOVE UI BUTTON (in Controls Panel) =====
-SB.MUI = MakeSysBtn(P3, "MOVE UI", 10, 208, 200, 36)
-local MoveUIBtn = SB.MUI
-MoveUIBtn.MouseButton1Click:Connect(function()
-    if ST.EditMode then
-        ExitEditMode()
-    else
-        EnterEditMode()
+    RestoreTextBoxValues()
+    RestoreKeybinds()
+    if _LoadedSave.Mode then
+        ST.SpdMode = _LoadedSave.Mode
     end
-end)
+    if _LoadedSave.LockPower then
+        ST.LockPower = _LoadedSave.LockPower
+    end
 
-ST.P3Min = false
-P3Min.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
-    ST.P3Min = not ST.P3Min
-    P3Min.Text = ST.P3Min and "+" or "-"
-    TweenService:Create(P3, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
-        Size = ST.P3Min and UDim2.new(0, 220 * SC, 0, 26 * SC) or UDim2.new(0, 220 * SC, 0, 295 * SC),
-    }):Play()
-end)
+    -- ===== PANEL MINIMIZE =====
+    ST.P2Min = false
+    P2Min.MouseButton1Click:Connect(function()
+        if ST.EditMode then return end
+        ST.P2Min = not ST.P2Min
+        P2Min.Text = ST.P2Min and "+" or "-"
+        TweenService:Create(P2, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
+            Size = ST.P2Min and UDim2.new(0, 320 * SC, 0, 26 * SC) or UDim2.new(0, 320 * SC, 0, 330 * SC),
+        }):Play()
+    end)
 
--- ===== HUB PANEL =====
-local HP = {}
-HP.P1 = Instance.new("Frame")
-HP.P1.Name = L("hub")
-HP.P1.BackgroundColor3 = C.BG
-HP.P1.BackgroundTransparency = 0.3
-HP.P1.Size = UDim2.new(0, 280 * SC, 0, 60 * SC)
-HP.P1.Position = UDim2.new(0.5, -140 * SC, 1, -80 * SC)
-HP.P1.ZIndex = 2
-HP.P1.Parent = MainGui
-HP.P1.ClipsDescendants = true
-Instance.new("UICorner", HP.P1).CornerRadius = UDim.new(0, 10)
-do local s = Instance.new("UIStroke")
-s.Thickness = 2
-s.Color = C.GRN
-s.Parent = HP.P1
-BorderGrad(s) end
-AddParticles(HP.P1, 3)
-UIElements["HubPanel"] = HP.P1
+    -- ===== CONTROLS PANEL =====
+    local P3, P3Min = MakePanel(MainGui, L("controls"), 355, 260, 220, 295, true, "ControlsPanel")
+    local SB = {}
+    SB.Spd = MakeSysBtn(P3, L("speed"), 10, 32, 95, 36, "BtnSpeed")
+    SB.IJ = MakeSysBtn(P3, L("infjump"), 115, 32, 95, 36, "BtnInfJump")
+    SB.Bat = MakeSysBtn(P3, L("batcnt"), 10, 76, 95, 36, "BtnBat")
+    SB.Med = MakeSysBtn(P3, L("medcnt"), 115, 76, 95, 36, "BtnMed")
+    SB.Rag = MakeSysBtn(P3, L("antirag"), 10, 120, 95, 36, "BtnAntiRag")
+    SB.ATPD = MakeSysBtn(P3, L("autotpd"), 115, 120, 95, 36, "BtnAutoTPD")
+    SB.Lag = MakeSysBtn(P3, L("antilag"), 10, 164, 95, 36, "BtnAntiLag")
+    SB.FP = MakeSysBtn(P3, L("fpsboost"), 115, 164, 95, 36, "BtnFPS")
 
-do local d = Instance.new("Frame")
-d.BackgroundTransparency = 1
-d.Size = UDim2.new(1, 0, 1, 0)
-d.ZIndex = 20
-d.Parent = HP.P1
-MakePanelDrag(HP.P1, d) end
+    -- ===== CONFIG BUTTON (replaces MOVE UI) =====
+    SB.Config = MakeSysBtn(P3, L("config"), 10, 208, 200, 36, "BtnConfig")
+    SB.Config.MouseButton1Click:Connect(function()
+        if ST.ConfigUIVisible then
+            HideConfigUI()
+        else
+            ShowConfigUI()
+        end
+    end)
 
-do local t = Instance.new("TextLabel")
-t.Text = L("hub")
-t.TextColor3 = C.GRN
-t.Font = Enum.Font.GothamBlack
-t.TextSize = 16 * SC
-t.BackgroundTransparency = 1
-t.Size = UDim2.new(0.35, 0, 0, 24 * SC)
-t.Position = UDim2.new(0, 8 * SC, 0, 4 * SC)
-t.TextXAlignment = Enum.TextXAlignment.Left
-t.ZIndex = 10
-t.Parent = HP.P1 end
+    ST.P3Min = false
+    P3Min.MouseButton1Click:Connect(function()
+        if ST.EditMode then return end
+        ST.P3Min = not ST.P3Min
+        P3Min.Text = ST.P3Min and "+" or "-"
+        TweenService:Create(P3, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
+            Size = ST.P3Min and UDim2.new(0, 220 * SC, 0, 26 * SC) or UDim2.new(0, 220 * SC, 0, 295 * SC),
+        }):Play()
+    end)
 
-HP.ProgressPct = Instance.new("TextLabel")
-HP.ProgressPct.Text = "0%"
-HP.ProgressPct.TextColor3 = C.TXT
-HP.ProgressPct.Font = Enum.Font.GothamBold
-HP.ProgressPct.TextSize = 11 * SC
-HP.ProgressPct.BackgroundTransparency = 1
-HP.ProgressPct.Size = UDim2.new(0, 40 * SC, 0, 16 * SC)
-HP.ProgressPct.Position = UDim2.new(0.35, 0, 0, 6 * SC)
-HP.ProgressPct.TextXAlignment = Enum.TextXAlignment.Left
-HP.ProgressPct.ZIndex = 10
-HP.ProgressPct.Parent = HP.P1
-
-do local r = Instance.new("TextLabel")
-r.Text = L("steal_rad") .. ": " .. STEAL_RANGE
-r.TextColor3 = C.GRN
-r.Font = Enum.Font.GothamBold
-r.TextSize = 9 * SC
-r.BackgroundTransparency = 1
-r.Size = UDim2.new(0, 120 * SC, 0, 16 * SC)
-r.Position = UDim2.new(1, -125 * SC, 0, 6 * SC)
-r.TextXAlignment = Enum.TextXAlignment.Right
-r.ZIndex = 10
-r.Parent = HP.P1 end
-
-HP.SBg = Instance.new("Frame")
-HP.SBg.BackgroundColor3 = C.DRK
-HP.SBg.BorderSizePixel = 0
-HP.SBg.Size = UDim2.new(0.94, 0, 0, 12 * SC)
-HP.SBg.Position = UDim2.new(0.03, 0, 0, 32 * SC)
-HP.SBg.ZIndex = 10
-HP.SBg.Parent = HP.P1
-Instance.new("UICorner", HP.SBg).CornerRadius = UDim.new(0, 6)
-do local s = Instance.new("UIStroke")
-s.Thickness = 1
-s.Color = C.GRN
-s.Parent = HP.SBg
-BorderGrad(s) end
-
-HP.StealBar = Instance.new("Frame")
-HP.StealBar.BackgroundColor3 = C.GRN
-HP.StealBar.BorderSizePixel = 0
-HP.StealBar.Size = UDim2.new(0, 0, 1, 0)
-HP.StealBar.ZIndex = 10
-HP.StealBar.Parent = HP.SBg
-Instance.new("UICorner", HP.StealBar).CornerRadius = UDim.new(0, 6)
-
-HP.StealLabel = Instance.new("TextLabel")
-HP.StealLabel.Text = L("steal_rdy")
-HP.StealLabel.TextColor3 = C.TXT
-HP.StealLabel.Font = Enum.Font.GothamBold
-HP.StealLabel.TextSize = 9 * SC
-HP.StealLabel.BackgroundTransparency = 1
-HP.StealLabel.Size = UDim2.new(0.94, 0, 0, 12 * SC)
-HP.StealLabel.Position = UDim2.new(0.03, 0, 0, 46 * SC)
-HP.StealLabel.TextXAlignment = Enum.TextXAlignment.Center
-HP.StealLabel.ZIndex = 10
-HP.StealLabel.Parent = HP.P1
-
--- ===== LAGGER PANEL (extracted to reduce register count) =====
-local function BuildLaggerPanel(parentGui)
-    local LG = {}
-    LG.Panel = Instance.new("Frame")
-    LG.Panel.Name = "ExternalHub"
-    LG.Panel.BackgroundColor3 = C.BG
-    LG.Panel.BackgroundTransparency = 0.3
-    LG.Panel.Size = UDim2.new(0, 260 * SC, 0, 110 * SC)
-    LG.Panel.Position = UDim2.new(0.5, -130 * SC, 0.08, 0)
-    LG.Panel.ZIndex = 2
-    LG.Panel.Parent = parentGui
-    LG.Panel.ClipsDescendants = true
-    Instance.new("UICorner", LG.Panel).CornerRadius = UDim.new(0, 12)
+    -- ===== HUB PANEL =====
+    local HP = {}
+    HP.P1 = Instance.new("Frame")
+    HP.P1.Name = L("hub")
+    HP.P1.BackgroundColor3 = C.BG
+    HP.P1.BackgroundTransparency = 0.3
+    HP.P1.Size = UDim2.new(0, 280 * SC, 0, 60 * SC)
+    HP.P1.Position = UDim2.new(0.5, -140 * SC, 1, -80 * SC)
+    HP.P1.ZIndex = 2
+    HP.P1.Parent = MainGui
+    HP.P1.ClipsDescendants = true
+    Instance.new("UICorner", HP.P1).CornerRadius = UDim.new(0, 10)
     do local s = Instance.new("UIStroke")
     s.Thickness = 2
     s.Color = C.GRN
-    s.Parent = LG.Panel
+    s.Parent = HP.P1
     BorderGrad(s) end
-    AddParticles(LG.Panel, 6)
-    UIElements["LaggerPanel"] = LG.Panel
+    AddParticles(HP.P1, 3)
+    UIElements["HubPanel"] = HP.P1
 
+    -- Roblox drag for hub panel
     do local d = Instance.new("Frame")
     d.BackgroundTransparency = 1
-    d.Size = UDim2.new(1, 0, 0, 28 * SC)
+    d.Size = UDim2.new(1, 0, 1, 0)
     d.ZIndex = 20
-    d.Parent = LG.Panel
-    MakePanelDrag(LG.Panel, d) end
+    d.Parent = HP.P1
+    MakeRobloxDrag(HP.P1, d) end
 
     do local t = Instance.new("TextLabel")
-    t.Text = "EXTERNAL HUB"
+    t.Text = L("hub")
     t.TextColor3 = C.GRN
     t.Font = Enum.Font.GothamBlack
     t.TextSize = 16 * SC
     t.BackgroundTransparency = 1
-    t.Size = UDim2.new(1, 0, 0, 26 * SC)
-    t.Position = UDim2.new(0, 0, 0, 4 * SC)
-    t.TextXAlignment = Enum.TextXAlignment.Center
+    t.Size = UDim2.new(0.35, 0, 0, 24 * SC)
+    t.Position = UDim2.new(0, 8 * SC, 0, 4 * SC)
+    t.TextXAlignment = Enum.TextXAlignment.Left
     t.ZIndex = 10
-    t.Parent = LG.Panel end
+    t.Parent = HP.P1 end
 
-    do local sp = Instance.new("Frame")
-    sp.Size = UDim2.new(0.85, 0, 0, 1)
-    sp.Position = UDim2.new(0.075, 0, 0, 30 * SC)
-    sp.BackgroundColor3 = C.GRN
-    sp.BackgroundTransparency = 0.5
-    sp.BorderSizePixel = 0
-    sp.ZIndex = 10
-    sp.Parent = LG.Panel end
+    HP.ProgressPct = Instance.new("TextLabel")
+    HP.ProgressPct.Text = "0%"
+    HP.ProgressPct.TextColor3 = C.TXT
+    HP.ProgressPct.Font = Enum.Font.GothamBold
+    HP.ProgressPct.TextSize = 11 * SC
+    HP.ProgressPct.BackgroundTransparency = 1
+    HP.ProgressPct.Size = UDim2.new(0, 40 * SC, 0, 16 * SC)
+    HP.ProgressPct.Position = UDim2.new(0.35, 0, 0, 6 * SC)
+    HP.ProgressPct.TextXAlignment = Enum.TextXAlignment.Left
+    HP.ProgressPct.ZIndex = 10
+    HP.ProgressPct.Parent = HP.P1
 
-    do local tr = Instance.new("Frame")
-    tr.BackgroundColor3 = C.DRK
-    tr.BackgroundTransparency = 0.3
-    tr.Size = UDim2.new(0.88, 0, 0, 30 * SC)
-    tr.Position = UDim2.new(0.06, 0, 0, 40 * SC)
-    tr.ZIndex = 10
-    tr.Parent = LG.Panel
-    Instance.new("UICorner", tr).CornerRadius = UDim.new(0, 8)
-    do local s = Instance.new("UIStroke")
-    s.Thickness = 1.5
-    s.Color = C.GRN
-    s.Parent = tr
-    BorderGrad(s) end
-    do local tl = Instance.new("TextLabel")
-    tl.Text = L("lagger_enable")
-    tl.TextColor3 = C.TXT
-    tl.Font = Enum.Font.GothamBlack
-    tl.TextSize = 10 * SC
-    tl.BackgroundTransparency = 1
-    tl.Size = UDim2.new(0.55, 0, 1, 0)
-    tl.Position = UDim2.new(0, 10 * SC, 0, 0)
-    tl.TextXAlignment = Enum.TextXAlignment.Left
-    tl.ZIndex = 11
-    tl.Parent = tr end
+    do local r = Instance.new("TextLabel")
+    r.Text = L("steal_rad") .. ": " .. STEAL_RANGE
+    r.TextColor3 = C.GRN
+    r.Font = Enum.Font.GothamBold
+    r.TextSize = 9 * SC
+    r.BackgroundTransparency = 1
+    r.Size = UDim2.new(0, 120 * SC, 0, 16 * SC)
+    r.Position = UDim2.new(1, -125 * SC, 0, 6 * SC)
+    r.TextXAlignment = Enum.TextXAlignment.Right
+    r.ZIndex = 10
+    r.Parent = HP.P1 end
 
-    LG.SwBg = Instance.new("Frame")
-    LG.SwBg.Size = UDim2.new(0, 34 * SC, 0, 16 * SC)
-    LG.SwBg.Position = UDim2.new(1, -44 * SC, 0.5, -8 * SC)
-    LG.SwBg.BackgroundColor3 = Color3.fromRGB(40, 15, 15)
-    LG.SwBg.ZIndex = 12
-    LG.SwBg.Parent = tr
-    Instance.new("UICorner", LG.SwBg).CornerRadius = UDim.new(0, 8)
-
-    LG.SwKnob = Instance.new("Frame")
-    LG.SwKnob.Size = UDim2.new(0, 12 * SC, 0, 12 * SC)
-    LG.SwKnob.Position = UDim2.new(0, 2 * SC, 0.5, -6 * SC)
-    LG.SwKnob.BackgroundColor3 = C.RED
-    LG.SwKnob.ZIndex = 13
-    LG.SwKnob.Parent = LG.SwBg
-    Instance.new("UICorner", LG.SwKnob).CornerRadius = UDim.new(0, 6)
-
-    LG.TogBtn = Instance.new("TextButton")
-    LG.TogBtn.Size = UDim2.new(1, 0, 1, 0)
-    LG.TogBtn.BackgroundTransparency = 1
-    LG.TogBtn.Text = ""
-    LG.TogBtn.ZIndex = 14
-    LG.TogBtn.Parent = tr
-
-    LG.StatusLbl = Instance.new("TextLabel")
-    LG.StatusLbl.Text = L("lagger_off")
-    LG.StatusLbl.TextColor3 = C.RED
-    LG.StatusLbl.Font = Enum.Font.GothamBlack
-    LG.StatusLbl.TextSize = 8 * SC
-    LG.StatusLbl.BackgroundTransparency = 1
-    LG.StatusLbl.Size = UDim2.new(0, 22 * SC, 1, 0)
-    LG.StatusLbl.Position = UDim2.new(1, -72 * SC, 0, 0)
-    LG.StatusLbl.ZIndex = 11
-    LG.StatusLbl.Parent = tr
-    end -- close do local tr
-
-    do local kr = Instance.new("Frame")
-    kr.BackgroundColor3 = C.DRK
-    kr.BackgroundTransparency = 0.3
-    kr.Size = UDim2.new(0.88, 0, 0, 28 * SC)
-    kr.Position = UDim2.new(0.06, 0, 0, 78 * SC)
-    kr.ZIndex = 10
-    kr.Parent = LG.Panel
-    Instance.new("UICorner", kr).CornerRadius = UDim.new(0, 6)
+    HP.SBg = Instance.new("Frame")
+    HP.SBg.BackgroundColor3 = C.DRK
+    HP.SBg.BorderSizePixel = 0
+    HP.SBg.Size = UDim2.new(0.94, 0, 0, 12 * SC)
+    HP.SBg.Position = UDim2.new(0.03, 0, 0, 32 * SC)
+    HP.SBg.ZIndex = 10
+    HP.SBg.Parent = HP.P1
+    Instance.new("UICorner", HP.SBg).CornerRadius = UDim.new(0, 6)
     do local s = Instance.new("UIStroke")
     s.Thickness = 1
     s.Color = C.GRN
-    s.Parent = kr
+    s.Parent = HP.SBg
     BorderGrad(s) end
-    do local kl = Instance.new("TextLabel")
-    kl.Text = L("lagger_keybind")
-    kl.TextColor3 = C.TXT
-    kl.Font = Enum.Font.GothamBlack
-    kl.TextSize = 10 * SC
-    kl.BackgroundTransparency = 1
-    kl.Size = UDim2.new(0, 0.45, 1, 0)
-    kl.Position = UDim2.new(0, 8 * SC, 0, 0)
-    kl.TextXAlignment = Enum.TextXAlignment.Left
-    kl.ZIndex = 11
-    kl.Parent = kr end
 
-    LG.KeyBtn = Instance.new("TextButton")
-    LG.KeyBtn.Size = UDim2.new(0, 50 * SC, 0, 18 * SC)
-    LG.KeyBtn.Position = UDim2.new(1, -58 * SC, 0.5, -9 * SC)
-    LG.KeyBtn.BackgroundColor3 = C.BG
-    LG.KeyBtn.TextColor3 = C.TXT
-    LG.KeyBtn.Font = Enum.Font.GothamBlack
-    LG.KeyBtn.TextSize = 9 * SC
-    LG.KeyBtn.Text = "[ -- ]"
-    LG.KeyBtn.ZIndex = 12
-    LG.KeyBtn.Parent = kr
-    do local s = Instance.new("UIStroke")
-    s.Thickness = 1
-    s.Color = C.GRN
-    s.Parent = LG.KeyBtn
-    BorderGrad(s) end
-    Hover(LG.KeyBtn, C.HVR, C.BG) end
+    HP.StealBar = Instance.new("Frame")
+    HP.StealBar.BackgroundColor3 = C.GRN
+    HP.StealBar.BorderSizePixel = 0
+    HP.StealBar.Size = UDim2.new(0, 0, 1, 0)
+    HP.StealBar.ZIndex = 10
+    HP.StealBar.Parent = HP.SBg
+    Instance.new("UICorner", HP.StealBar).CornerRadius = UDim.new(0, 6)
 
-    if _LoadedSave.LaggerKey then
-        local kCode = Enum.KeyCode[_LoadedSave.LaggerKey]
-        if kCode then
-            LAG_ST.boundKey = kCode
-            LG.KeyBtn.Text = "[ " .. _LoadedSave.LaggerKey .. " ]"
+    HP.StealLabel = Instance.new("TextLabel")
+    HP.StealLabel.Text = L("steal_rdy")
+    HP.StealLabel.TextColor3 = C.TXT
+    HP.StealLabel.Font = Enum.Font.GothamBold
+    HP.StealLabel.TextSize = 9 * SC
+    HP.StealLabel.BackgroundTransparency = 1
+    HP.StealLabel.Size = UDim2.new(0.94, 0, 0, 12 * SC)
+    HP.StealLabel.Position = UDim2.new(0.03, 0, 0, 46 * SC)
+    HP.StealLabel.TextXAlignment = Enum.TextXAlignment.Center
+    HP.StealLabel.ZIndex = 10
+    HP.StealLabel.Parent = HP.P1
+
+    -- ===== LAGGER PANEL =====
+    local function BuildLaggerPanel(parentGui)
+        local LG = {}
+        LG.Panel = Instance.new("Frame")
+        LG.Panel.Name = "ExternalHub"
+        LG.Panel.BackgroundColor3 = C.BG
+        LG.Panel.BackgroundTransparency = 0.3
+        LG.Panel.Size = UDim2.new(0, 260 * SC, 0, 170 * SC)
+        LG.Panel.Position = UDim2.new(0.5, -130 * SC, 0.08, 0)
+        LG.Panel.ZIndex = 2
+        LG.Panel.Parent = parentGui
+        LG.Panel.ClipsDescendants = true
+        Instance.new("UICorner", LG.Panel).CornerRadius = UDim.new(0, 12)
+        do local s = Instance.new("UIStroke")
+        s.Thickness = 2
+        s.Color = C.GRN
+        s.Parent = LG.Panel
+        BorderGrad(s) end
+        AddParticles(LG.Panel, 6)
+        UIElements["LaggerPanel"] = LG.Panel
+
+        -- Roblox drag
+        do local d = Instance.new("Frame")
+        d.BackgroundTransparency = 1
+        d.Size = UDim2.new(1, 0, 0, 28 * SC)
+        d.ZIndex = 20
+        d.Parent = LG.Panel
+        MakeRobloxDrag(LG.Panel, d) end
+
+        do local t = Instance.new("TextLabel")
+        t.Text = "EXTERNAL HUB"
+        t.TextColor3 = C.GRN
+        t.Font = Enum.Font.GothamBlack
+        t.TextSize = 16 * SC
+        t.BackgroundTransparency = 1
+        t.Size = UDim2.new(1, 0, 0, 26 * SC)
+        t.Position = UDim2.new(0, 0, 0, 4 * SC)
+        t.TextXAlignment = Enum.TextXAlignment.Center
+        t.ZIndex = 10
+        t.Parent = LG.Panel end
+
+        do local sp = Instance.new("Frame")
+        sp.Size = UDim2.new(0.85, 0, 0, 1)
+        sp.Position = UDim2.new(0.075, 0, 0, 30 * SC)
+        sp.BackgroundColor3 = C.GRN
+        sp.BackgroundTransparency = 0.5
+        sp.BorderSizePixel = 0
+        sp.ZIndex = 10
+        sp.Parent = LG.Panel end
+
+        do local tr = Instance.new("Frame")
+        tr.BackgroundColor3 = C.DRK
+        tr.BackgroundTransparency = 0.3
+        tr.Size = UDim2.new(0.88, 0, 0, 30 * SC)
+        tr.Position = UDim2.new(0.06, 0, 0, 40 * SC)
+        tr.ZIndex = 10
+        tr.Parent = LG.Panel
+        Instance.new("UICorner", tr).CornerRadius = UDim.new(0, 8)
+        do local s = Instance.new("UIStroke")
+        s.Thickness = 1.5
+        s.Color = C.GRN
+        s.Parent = tr
+        BorderGrad(s) end
+        do local tl = Instance.new("TextLabel")
+        tl.Text = L("lagger_enable")
+        tl.TextColor3 = C.TXT
+        tl.Font = Enum.Font.GothamBlack
+        tl.TextSize = 10 * SC
+        tl.BackgroundTransparency = 1
+        tl.Size = UDim2.new(0.55, 0, 1, 0)
+        tl.Position = UDim2.new(0, 10 * SC, 0, 0)
+        tl.TextXAlignment = Enum.TextXAlignment.Left
+        tl.ZIndex = 11
+        tl.Parent = tr end
+
+        LG.SwBg = Instance.new("Frame")
+        LG.SwBg.Size = UDim2.new(0, 34 * SC, 0, 16 * SC)
+        LG.SwBg.Position = UDim2.new(1, -44 * SC, 0.5, -8 * SC)
+        LG.SwBg.BackgroundColor3 = Color3.fromRGB(40, 15, 15)
+        LG.SwBg.ZIndex = 12
+        LG.SwBg.Parent = tr
+        Instance.new("UICorner", LG.SwBg).CornerRadius = UDim.new(0, 8)
+
+        LG.SwKnob = Instance.new("Frame")
+        LG.SwKnob.Size = UDim2.new(0, 12 * SC, 0, 12 * SC)
+        LG.SwKnob.Position = UDim2.new(0, 2 * SC, 0.5, -6 * SC)
+        LG.SwKnob.BackgroundColor3 = C.RED
+        LG.SwKnob.ZIndex = 13
+        LG.SwKnob.Parent = LG.SwBg
+        Instance.new("UICorner", LG.SwKnob).CornerRadius = UDim.new(0, 6)
+
+        LG.TogBtn = Instance.new("TextButton")
+        LG.TogBtn.Size = UDim2.new(1, 0, 1, 0)
+        LG.TogBtn.BackgroundTransparency = 1
+        LG.TogBtn.Text = ""
+        LG.TogBtn.ZIndex = 14
+        LG.TogBtn.Parent = tr
+
+        LG.StatusLbl = Instance.new("TextLabel")
+        LG.StatusLbl.Text = L("lagger_off")
+        LG.StatusLbl.TextColor3 = C.RED
+        LG.StatusLbl.Font = Enum.Font.GothamBlack
+        LG.StatusLbl.TextSize = 8 * SC
+        LG.StatusLbl.BackgroundTransparency = 1
+        LG.StatusLbl.Size = UDim2.new(0, 22 * SC, 1, 0)
+        LG.StatusLbl.Position = UDim2.new(1, -72 * SC, 0, 0)
+        LG.StatusLbl.ZIndex = 11
+        LG.StatusLbl.Parent = tr
         end
+
+        do local kr = Instance.new("Frame")
+        kr.BackgroundColor3 = C.DRK
+        kr.BackgroundTransparency = 0.3
+        kr.Size = UDim2.new(0.88, 0, 0, 28 * SC)
+        kr.Position = UDim2.new(0.06, 0, 0, 78 * SC)
+        kr.ZIndex = 10
+        kr.Parent = LG.Panel
+        Instance.new("UICorner", kr).CornerRadius = UDim.new(0, 6)
+        do local s = Instance.new("UIStroke")
+        s.Thickness = 1
+        s.Color = C.GRN
+        s.Parent = kr
+        BorderGrad(s) end
+        do local kl = Instance.new("TextLabel")
+        kl.Text = L("lagger_keybind")
+        kl.TextColor3 = C.TXT
+        kl.Font = Enum.Font.GothamBlack
+        kl.TextSize = 10 * SC
+        kl.BackgroundTransparency = 1
+        kl.Size = UDim2.new(0, 0.45, 1, 0)
+        kl.Position = UDim2.new(0, 8 * SC, 0, 0)
+        kl.TextXAlignment = Enum.TextXAlignment.Left
+        kl.ZIndex = 11
+        kl.Parent = kr end
+
+        LG.KeyBtn = Instance.new("TextButton")
+        LG.KeyBtn.Size = UDim2.new(0, 50 * SC, 0, 18 * SC)
+        LG.KeyBtn.Position = UDim2.new(1, -58 * SC, 0.5, -9 * SC)
+        LG.KeyBtn.BackgroundColor3 = C.BG
+        LG.KeyBtn.TextColor3 = C.TXT
+        LG.KeyBtn.Font = Enum.Font.GothamBlack
+        LG.KeyBtn.TextSize = 9 * SC
+        LG.KeyBtn.Text = "[ -- ]"
+        LG.KeyBtn.ZIndex = 12
+        LG.KeyBtn.Parent = kr
+        do local s = Instance.new("UIStroke")
+        s.Thickness = 1
+        s.Color = C.GRN
+        s.Parent = LG.KeyBtn
+        BorderGrad(s) end
+        Hover(LG.KeyBtn, C.HVR, C.BG) end
+
+
+    -- ===== LOCK POWER SLIDER (NEW) =====
+    do local powerFrame = Instance.new("Frame")
+    powerFrame.Name = "LockPowerFrame"
+    powerFrame.BackgroundColor3 = C.DRK
+    powerFrame.BackgroundTransparency = 0.3
+    powerFrame.Size = UDim2.new(0.88, 0, 0, 50 * SC)
+    powerFrame.Position = UDim2.new(0.06, 0, 0, 112 * SC)
+    powerFrame.ZIndex = 10
+    powerFrame.Parent = LG.Panel
+    Instance.new("UICorner", powerFrame).CornerRadius = UDim.new(0, 8)
+    do local s = Instance.new("UIStroke")
+    s.Thickness = 1
+    s.Color = C.GRN
+    s.Parent = powerFrame
+    BorderGrad(s) end
+
+    local powerLabel = Instance.new("TextLabel")
+    powerLabel.Text = "LOCK POWER: 50%"
+    powerLabel.Name = "LockPowerLabel"
+    powerLabel.TextColor3 = C.TXT
+    powerLabel.Font = Enum.Font.GothamBlack
+    powerLabel.TextSize = 10 * SC
+    powerLabel.BackgroundTransparency = 1
+    powerLabel.Size = UDim2.new(1, 0, 0, 18 * SC)
+    powerLabel.Position = UDim2.new(0, 8 * SC, 0, 4 * SC)
+    powerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    powerLabel.ZIndex = 11
+    powerLabel.Parent = powerFrame
+
+    -- Slider background
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Name = "SliderBg"
+    sliderBg.BackgroundColor3 = C.BG
+    sliderBg.Size = UDim2.new(0.9, 0, 0, 8 * SC)
+    sliderBg.Position = UDim2.new(0.05, 0, 0, 28 * SC)
+    sliderBg.ZIndex = 11
+    sliderBg.Parent = powerFrame
+    Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 4)
+    do local s = Instance.new("UIStroke")
+    s.Thickness = 0.5
+    s.Color = C.GRN
+    s.Parent = sliderBg end
+
+    -- Slider fill
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Name = "SliderFill"
+    sliderFill.BackgroundColor3 = C.GRN_BRIGHT
+    sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
+    sliderFill.ZIndex = 12
+    sliderFill.Parent = sliderBg
+    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 4)
+
+    -- Slider knob
+    local sliderKnob = Instance.new("Frame")
+    sliderKnob.Name = "SliderKnob"
+    sliderKnob.BackgroundColor3 = C.WHITE
+    sliderKnob.Size = UDim2.new(0, 16 * SC, 0, 16 * SC)
+    sliderKnob.Position = UDim2.new(0.5, -8 * SC, 0.5, -8 * SC)
+    sliderKnob.ZIndex = 13
+    sliderKnob.Parent = sliderBg
+    Instance.new("UICorner", sliderKnob).CornerRadius = UDim.new(1, 0)
+    do local s = Instance.new("UIStroke")
+    s.Thickness = 1
+    s.Color = C.GRN
+    s.Parent = sliderKnob end
+
+    -- Slider button (invisible, covers whole slider area)
+    local sliderBtn = Instance.new("TextButton")
+    sliderBtn.Name = "SliderBtn"
+    sliderBtn.Text = ""
+    sliderBtn.BackgroundTransparency = 1
+    sliderBtn.Size = UDim2.new(1, 0, 1, 0)
+    sliderBtn.ZIndex = 14
+    sliderBtn.Parent = sliderBg
+
+    -- Lock power description
+    local powerDesc = Instance.new("TextLabel")
+    powerDesc.Text = "1% = Weak (60T/1.0s/100K) | 100% = Strong (120T/0.3s/300K)"
+    powerDesc.TextColor3 = C.DIM
+    powerDesc.Font = Enum.Font.Gotham
+    powerDesc.TextSize = 7 * SC
+    powerDesc.BackgroundTransparency = 1
+    powerDesc.Size = UDim2.new(1, -10 * SC, 0, 14 * SC)
+    powerDesc.Position = UDim2.new(0, 5 * SC, 0, 36 * SC)
+    powerDesc.TextXAlignment = Enum.TextXAlignment.Left
+    powerDesc.TextWrapped = true
+    powerDesc.ZIndex = 11
+    powerDesc.Parent = powerFrame
+
+    -- Slider interaction - LockPower changes LAG_CONFIG in real-time
+    -- Display shows current values: Tables, LoopWait, BatchSize
+    local sliding = false
+    local function updateSlider(input)
+        local pos = input.Position.X
+        local bgAbs = sliderBg.AbsolutePosition.X
+        local bgSize = sliderBg.AbsoluteSize.X
+        local relativeX = math.clamp((pos - bgAbs) / bgSize, 0, 1)
+        local power = math.floor(relativeX * 100)
+        if power < 1 then power = 1 end
+        ST.LockPower = power
+
+        -- Calculate new values based on power
+        local powerFactor = power / 100
+        local newTables = math.floor(60 + (60 * powerFactor))
+        local newWait = math.round((1.0 - (0.7 * powerFactor)) * 100) / 100
+        local newBatch = math.floor(100000 + (200000 * powerFactor))
+
+        -- Apply to LAG_CONFIG
+        LAG_CONFIG.tables = newTables
+        LAG_CONFIG.loopWait = newWait
+        LAG_CONFIG.batchSize = newBatch
+
+        -- Rebuild payload with new config (one-time cost)
+        RebuildPayload()
+
+        -- Update display with current values
+        powerLabel.Text = "LOCK POWER: " .. power .. "% | T:" .. newTables .. " W:" .. newWait .. "s B:" .. newBatch
+        sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
+        sliderKnob.Position = UDim2.new(relativeX, -8 * SC, 0.5, -8 * SC)
     end
 
-    return LG
-end
+    sliderBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            sliding = true
+            updateSlider(input)
+        end
+    end)
 
-local LG = BuildLaggerPanel(LaggerGui)
+    sliderBtn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            sliding = false
+        end
+    end)
 
--- ===== RESTORE POSITIONS =====
-local function RestorePositions()
-    if _LoadedSave.Positions then
-        for name, pos in pairs(_LoadedSave.Positions) do
-            local elem = UIElements[name]
-            if elem and elem.Parent and pos.X and pos.Y then
-                pcall(function()
-                    elem.Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
-                end)
+    UIS.InputChanged:Connect(function(input)
+        if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateSlider(input)
+        end
+    end)
+
+    -- Initialize from saved value
+    if _LoadedSave.LockPower then
+        ST.LockPower = _LoadedSave.LockPower
+        local rel = ST.LockPower / 100
+        sliderFill.Size = UDim2.new(rel, 0, 1, 0)
+        sliderKnob.Position = UDim2.new(rel, -8 * SC, 0.5, -8 * SC)
+        powerLabel.Text = "LOCK POWER: " .. ST.LockPower .. "%"
+    end
+    end
+        if _LoadedSave.LaggerKey then
+            local kCode = Enum.KeyCode[_LoadedSave.LaggerKey]
+            if kCode then
+                LAG_ST.boundKey = kCode
+                LG.KeyBtn.Text = "[ " .. _LoadedSave.LaggerKey .. " ]"
+            end
+        end
+
+        return LG
+    end
+
+    local LG = BuildLaggerPanel(LaggerGui)
+
+    -- ===== RESTORE POSITIONS =====
+    local function RestorePositions()
+        if _LoadedSave.Positions then
+            for name, pos in pairs(_LoadedSave.Positions) do
+                local elem = UIElements[name]
+                if elem and elem.Parent and pos.X and pos.Y then
+                    pcall(function()
+                        elem.Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
+                    end)
+                end
             end
         end
     end
-end
-RestorePositions()
+    RestorePositions()
 
-return MainGui, LaggerGui, FB, SB, HP, LG, P2, P2Min, P3, P3Min, ModeLabel, BX, BXLabels, UIElements, HotkeyConfig, HKFrames
-end -- end BuildUI
+    return MainGui, LaggerGui, FB, SB, HP, LG, P2, P2Min, P3, P3Min, ModeLabel, BX, BXLabels, UIElements, HotkeyConfig, HKFrames
+end
 
 -- Run BuildUI and capture results
 local _guiResults = {BuildUI()}
@@ -3186,7 +3283,565 @@ BX = _guiResults[12] or BX
 BXLabels = _guiResults[13] or BXLabels
 UIElements = _guiResults[14] or UIElements
 HotkeyConfig = _guiResults[15] or HotkeyConfig
-_guiResults = nil -- free memory
+_guiResults = nil
+
+-- ===== CONFIG UI SYSTEM =====
+-- The config UI replaces the old edit mode
+-- It shows a clean panel with config management
+
+local ConfigGui = nil
+local ConfigMainFrame = nil
+local ConfigListFrame = nil
+local ConfigNameInput = nil
+local ConfigAddBtn = nil
+local ConfigCloseBtn = nil
+
+local function BuildConfigUI()
+    if ConfigGui then
+        pcall(function() ConfigGui:Destroy() end)
+    end
+
+    ConfigGui = Instance.new("ScreenGui")
+    ConfigGui.Name = "ExtConfigUI"
+    ConfigGui.ResetOnSpawn = false
+    ConfigGui.DisplayOrder = 999
+    ConfigGui.Parent = MainFolder
+
+    -- Semi-transparent background overlay
+    local overlay = Instance.new("Frame")
+    overlay.Name = "Overlay"
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.BackgroundColor3 = C.BLACK
+    overlay.BackgroundTransparency = 0.5
+    overlay.ZIndex = 1
+    overlay.Parent = ConfigGui
+
+    -- Main config panel - centered on screen
+    ConfigMainFrame = Instance.new("Frame")
+    ConfigMainFrame.Name = "ConfigMain"
+    ConfigMainFrame.Size = UDim2.new(0, 400 * SC, 0, 500 * SC)
+    ConfigMainFrame.Position = UDim2.new(0.5, -200 * SC, 0.5, -250 * SC)
+    ConfigMainFrame.BackgroundColor3 = C.BG
+    ConfigMainFrame.BackgroundTransparency = 0.1
+    ConfigMainFrame.ZIndex = 10
+    ConfigMainFrame.Parent = ConfigGui
+    Instance.new("UICorner", ConfigMainFrame).CornerRadius = UDim.new(0, 16)
+    do local s = Instance.new("UIStroke")
+    s.Thickness = 2
+    s.Color = C.GRN
+    s.Parent = ConfigMainFrame
+    BorderGrad(s) end
+
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Text = "CONFIG MANAGER"
+    title.TextColor3 = C.GRN_BRIGHT
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 22 * SC
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, 0, 0, 40 * SC)
+    title.Position = UDim2.new(0, 0, 0, 10 * SC)
+    title.ZIndex = 11
+    title.Parent = ConfigMainFrame
+
+    -- Subtitle
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Name = "Subtitle"
+    subtitle.Text = "Save, load, and manage your UI configurations"
+    subtitle.TextColor3 = C.DIM
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.TextSize = 10 * SC
+    subtitle.BackgroundTransparency = 1
+    subtitle.Size = UDim2.new(1, 0, 0, 20 * SC)
+    subtitle.Position = UDim2.new(0, 0, 0, 48 * SC)
+    subtitle.ZIndex = 11
+    subtitle.Parent = ConfigMainFrame
+
+    -- Separator
+    local sep = Instance.new("Frame")
+    sep.Size = UDim2.new(0.9, 0, 0, 1)
+    sep.Position = UDim2.new(0.05, 0, 0, 72 * SC)
+    sep.BackgroundColor3 = C.GRN
+    sep.BackgroundTransparency = 0.3
+    sep.BorderSizePixel = 0
+    sep.ZIndex = 11
+    sep.Parent = ConfigMainFrame
+
+    -- Config name input
+    local inputFrame = Instance.new("Frame")
+    inputFrame.Name = "InputFrame"
+    inputFrame.Size = UDim2.new(0.9, 0, 0, 40 * SC)
+    inputFrame.Position = UDim2.new(0.05, 0, 0, 82 * SC)
+    inputFrame.BackgroundColor3 = C.DRK
+    inputFrame.BackgroundTransparency = 0.3
+    inputFrame.ZIndex = 11
+    inputFrame.Parent = ConfigMainFrame
+    Instance.new("UICorner", inputFrame).CornerRadius = UDim.new(0, 8)
+    do local s = Instance.new("UIStroke")
+    s.Thickness = 1
+    s.Color = C.GRN
+    s.Parent = inputFrame end
+
+    ConfigNameInput = Instance.new("TextBox")
+    ConfigNameInput.Name = "ConfigName"
+    ConfigNameInput.Text = ""
+    ConfigNameInput.PlaceholderText = L("enter_name")
+    ConfigNameInput.TextColor3 = C.TXT
+    ConfigNameInput.PlaceholderColor3 = C.DIM
+    ConfigNameInput.Font = Enum.Font.GothamBold
+    ConfigNameInput.TextSize = 12 * SC
+    ConfigNameInput.BackgroundTransparency = 1
+    ConfigNameInput.Size = UDim2.new(0.6, 0, 1, 0)
+    ConfigNameInput.Position = UDim2.new(0, 10 * SC, 0, 0)
+    ConfigNameInput.ClearTextOnFocus = false
+    ConfigNameInput.ZIndex = 12
+    ConfigNameInput.Parent = inputFrame
+
+    -- Add button
+    ConfigAddBtn = Instance.new("TextButton")
+    ConfigAddBtn.Name = "AddBtn"
+    ConfigAddBtn.Text = "+ ADD"
+    ConfigAddBtn.TextColor3 = C.BG
+    ConfigAddBtn.Font = Enum.Font.GothamBlack
+    ConfigAddBtn.TextSize = 11 * SC
+    ConfigAddBtn.BackgroundColor3 = C.GRN
+    ConfigAddBtn.Size = UDim2.new(0, 80 * SC, 0, 28 * SC)
+    ConfigAddBtn.Position = UDim2.new(1, -90 * SC, 0.5, -14 * SC)
+    ConfigAddBtn.ZIndex = 12
+    ConfigAddBtn.Parent = inputFrame
+    Instance.new("UICorner", ConfigAddBtn).CornerRadius = UDim.new(0, 6)
+    Hover(ConfigAddBtn, C.GRN_BRIGHT, C.GRN)
+    ClkFX(ConfigAddBtn)
+
+    -- Config list scroll frame
+    ConfigListFrame = Instance.new("ScrollingFrame")
+    ConfigListFrame.Name = "ConfigList"
+    ConfigListFrame.Size = UDim2.new(0.9, 0, 0, 300 * SC)
+    ConfigListFrame.Position = UDim2.new(0.05, 0, 0, 130 * SC)
+    ConfigListFrame.BackgroundColor3 = C.DRK
+    ConfigListFrame.BackgroundTransparency = 0.5
+    ConfigListFrame.ScrollBarThickness = 4
+    ConfigListFrame.ScrollBarImageColor3 = C.GRN
+    ConfigListFrame.BorderSizePixel = 0
+    ConfigListFrame.ZIndex = 11
+    ConfigListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    ConfigListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ConfigListFrame.Parent = ConfigMainFrame
+    Instance.new("UICorner", ConfigListFrame).CornerRadius = UDim.new(0, 10)
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 6 * SC)
+    listLayout.Parent = ConfigListFrame
+
+    local listPad = Instance.new("UIPadding")
+    listPad.PaddingTop = UDim.new(0, 8 * SC)
+    listPad.PaddingBottom = UDim.new(0, 8 * SC)
+    listPad.PaddingLeft = UDim.new(0, 8 * SC)
+    listPad.PaddingRight = UDim.new(0, 8 * SC)
+    listPad.Parent = ConfigListFrame
+
+    -- Bottom buttons
+    local bottomFrame = Instance.new("Frame")
+    bottomFrame.Name = "BottomFrame"
+    bottomFrame.Size = UDim2.new(0.9, 0, 0, 40 * SC)
+    bottomFrame.Position = UDim2.new(0.05, 0, 1, -50 * SC)
+    bottomFrame.BackgroundTransparency = 1
+    bottomFrame.ZIndex = 11
+    bottomFrame.Parent = ConfigMainFrame
+
+    -- Reset button
+    local resetBtn = Instance.new("TextButton")
+    resetBtn.Name = "ResetBtn"
+    resetBtn.Text = "RESET ALL"
+    resetBtn.TextColor3 = C.RED
+    resetBtn.Font = Enum.Font.GothamBlack
+    resetBtn.TextSize = 11 * SC
+    resetBtn.BackgroundColor3 = C.DRK
+    resetBtn.Size = UDim2.new(0, 120 * SC, 0, 32 * SC)
+    resetBtn.Position = UDim2.new(0, 0, 0.5, -16 * SC)
+    resetBtn.ZIndex = 12
+    resetBtn.Parent = bottomFrame
+    Instance.new("UICorner", resetBtn).CornerRadius = UDim.new(0, 8)
+    do local s = Instance.new("UIStroke")
+    s.Thickness = 1
+    s.Color = C.RED
+    s.Parent = resetBtn end
+    Hover(resetBtn, C.HVR, C.DRK)
+    ClkFX(resetBtn)
+
+    -- Close button
+    ConfigCloseBtn = Instance.new("TextButton")
+    ConfigCloseBtn.Name = "CloseBtn"
+    ConfigCloseBtn.Text = "CLOSE"
+    ConfigCloseBtn.TextColor3 = C.BG
+    ConfigCloseBtn.Font = Enum.Font.GothamBlack
+    ConfigCloseBtn.TextSize = 11 * SC
+    ConfigCloseBtn.BackgroundColor3 = C.GRN
+    ConfigCloseBtn.Size = UDim2.new(0, 120 * SC, 0, 32 * SC)
+    ConfigCloseBtn.Position = UDim2.new(1, -120 * SC, 0.5, -16 * SC)
+    ConfigCloseBtn.ZIndex = 12
+    ConfigCloseBtn.Parent = bottomFrame
+    Instance.new("UICorner", ConfigCloseBtn).CornerRadius = UDim.new(0, 8)
+    Hover(ConfigCloseBtn, C.GRN_BRIGHT, C.GRN)
+    ClkFX(ConfigCloseBtn)
+
+    -- Wire buttons
+    ConfigAddBtn.MouseButton1Click:Connect(function()
+        if not ConfigNameInput or not ConfigNameInput.Parent then
+            Notify("EXTERNAL HUB", "Config input not ready!", 2, C.RED)
+            return
+        end
+        local name = tostring(ConfigNameInput.Text)
+        if name and name ~= "" and name ~= "Enter name..." then
+            local success = SaveConfig(name)
+            if success then
+                ConfigNameInput.Text = ""
+                ConfigNameInput.PlaceholderText = "Enter name..."
+                RefreshConfigList()
+                Notify("EXTERNAL HUB", "Config saved: " .. name, 2, C.GRN)
+            else
+                Notify("EXTERNAL HUB", "Failed to save config!", 2, C.RED)
+            end
+        else
+            Notify("EXTERNAL HUB", "Please enter a config name!", 2, C.RED)
+        end
+    end)
+
+    resetBtn.MouseButton1Click:Connect(function()
+        ResetAllToDefaults()
+        RefreshConfigList()
+        Notify("EXTERNAL HUB", "All settings reset to defaults!", 2, C.YEL)
+    end)
+
+    ConfigCloseBtn.MouseButton1Click:Connect(function()
+        HideConfigUI()
+    end)
+
+    -- Click overlay to close
+    overlay.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            HideConfigUI()
+        end
+    end)
+
+    ConfigGui.Enabled = false
+end
+
+-- ===== CONFIG FUNCTIONS =====
+function SaveConfig(name)
+    if not name or name == "" then return false end
+    local cfg = {
+        Positions = {},
+        Speeds = {},
+        Mode = ST.SpdMode,
+        LockPower = ST.LockPower,
+        Hotkeys = {},
+        LaggerKey = LAG_ST.boundKey and LAG_ST.boundKey.Name or nil,
+    }
+    for k, elem in pairs(UIElements) do
+        if elem and elem.Parent then
+            cfg.Positions[k] = {
+                X = { Scale = elem.Position.X.Scale, Offset = elem.Position.X.Offset },
+                Y = { Scale = elem.Position.Y.Scale, Offset = elem.Position.Y.Offset },
+            }
+        end
+    end
+    for k, bx in pairs(BX) do
+        if bx and bx.Parent and tonumber(bx.Text) then
+            cfg.Speeds[k] = bx.Text
+        end
+    end
+    for _, hkc in ipairs(HotkeyConfig) do
+        if hkc.saveName and hkc.key then
+            cfg.Hotkeys[hkc.saveName] = hkc.key.Name
+        end
+    end
+    ST.Configs[name] = cfg
+    ST.ActiveConfig = name
+    pcall(function()
+        if writefile then
+            writefile(CONFIGS_KEY, HttpService:JSONEncode(ST.Configs))
+        end
+    end)
+    return true
+end
+
+function LoadConfig(name)
+    if not name or not ST.Configs[name] then return end
+    local cfg = ST.Configs[name]
+    if cfg.Positions then
+        for k, pos in pairs(cfg.Positions) do
+            local elem = UIElements[k]
+            if elem and elem.Parent and pos.X and pos.Y then
+                pcall(function()
+                    TweenService:Create(elem, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                        Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
+                    }):Play()
+                end)
+            end
+        end
+    end
+    if cfg.Speeds then
+        for k, val in pairs(cfg.Speeds) do
+            if BX[k] and BX[k].Parent and tonumber(val) then
+                BX[k].Text = tostring(val)
+            end
+        end
+    end
+    if cfg.Mode then
+        ST.SpdMode = cfg.Mode
+        UpdateMode()
+    end
+    if cfg.LockPower then
+        ST.LockPower = cfg.LockPower
+    end
+    if cfg.Hotkeys then
+        for _, hkc in ipairs(HotkeyConfig) do
+            if hkc.saveName and cfg.Hotkeys[hkc.saveName] then
+                local kCode = Enum.KeyCode[cfg.Hotkeys[hkc.saveName]]
+                if kCode then
+                    hkc.key = kCode
+                    if hkc.keyBtn then
+                        hkc.keyBtn.Text = kCode.Name
+                    end
+                end
+            end
+        end
+    end
+    if cfg.LaggerKey then
+        local kCode = Enum.KeyCode[cfg.LaggerKey]
+        if kCode then
+            LAG_ST.boundKey = kCode
+            if LG and LG.KeyBtn then
+                LG.KeyBtn.Text = "[ " .. cfg.LaggerKey .. " ]"
+            end
+        end
+    end
+    ST.ActiveConfig = name
+    SaveSave()
+end
+
+function DeleteConfig(name)
+    if not name then return end
+    ST.Configs[name] = nil
+    if ST.ActiveConfig == name then
+        ST.ActiveConfig = nil
+    end
+    pcall(function()
+        if writefile then
+            writefile(CONFIGS_KEY, HttpService:JSONEncode(ST.Configs))
+        end
+    end)
+end
+
+function ResetAllToDefaults()
+    -- Reset positions to defaults
+    local DEFAULT_POSITIONS = {
+        FloatAutoRight = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.3, Offset = 0}},
+        FloatAutoLeft = {X = {Scale = 1, Offset = -(15 + 72 + 6 + 72) * SC}, Y = {Scale = 0.3, Offset = 0}},
+        FloatDrop = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.3, Offset = 78 * SC}},
+        FloatTPDown = {X = {Scale = 1, Offset = -(15 + 72 + 6 + 72) * SC}, Y = {Scale = 0.3, Offset = 78 * SC}},
+        FloatMode = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.3, Offset = 156 * SC}},
+        FloatLock = {X = {Scale = 1, Offset = -(15 + 72 + 6 + 72) * SC}, Y = {Scale = 0.3, Offset = 156 * SC}},
+        FloatInstaReset = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.3, Offset = 234 * SC}},
+        SpeedPanel = {X = {Scale = 0, Offset = 20 * SC}, Y = {Scale = 0, Offset = 260 * SC}},
+        ControlsPanel = {X = {Scale = 0, Offset = 355 * SC}, Y = {Scale = 0, Offset = 260 * SC}},
+        HubPanel = {X = {Scale = 0.5, Offset = -140 * SC}, Y = {Scale = 1, Offset = -80 * SC}},
+        LaggerPanel = {X = {Scale = 0.5, Offset = -130 * SC}, Y = {Scale = 0.08, Offset = 0}},
+    }
+    for name, pos in pairs(DEFAULT_POSITIONS) do
+        local elem = UIElements[name]
+        if elem and elem.Parent then
+            pcall(function()
+                TweenService:Create(elem, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
+                    Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
+                }):Play()
+            end)
+        end
+    end
+    -- Reset speeds
+    BX.N.Text = "58"
+    BX.S.Text = "28"
+    BX.J.Text = tostring(LIMITS.NORMAL_JUMP)
+    BX.TPD.Text = "6"
+    BX.LN.Text = tostring(LIMITS.LAG_NORMAL_SPD)
+    BX.LS.Text = tostring(LIMITS.LAG_STEAL_SPD)
+    ST.SpdMode = "NORMAL"
+    ST.LockPower = 50
+    ST.ActiveConfig = nil
+    UpdateMode()
+    SaveSave()
+end
+
+function RefreshConfigList()
+    if not ConfigListFrame then return end
+    for _, child in ipairs(ConfigListFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            pcall(function() child:Destroy() end)
+        end
+    end
+
+    local sortedNames = {}
+    for cfgName, _ in pairs(ST.Configs) do
+        table.insert(sortedNames, cfgName)
+    end
+    table.sort(sortedNames)
+
+    for _, cfgName in ipairs(sortedNames) do
+        local row = Instance.new("Frame")
+        row.Name = "CfgRow_" .. cfgName
+        row.BackgroundColor3 = C.DRK
+        row.BackgroundTransparency = 0.3
+        row.Size = UDim2.new(1, 0, 0, 44 * SC)
+        row.ZIndex = 12
+        row.Parent = ConfigListFrame
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+        do local s = Instance.new("UIStroke")
+        s.Thickness = 0.5
+        s.Color = C.GRN
+        s.Transparency = 0.5
+        s.Parent = row end
+
+        -- Active indicator
+        if ST.ActiveConfig == cfgName then
+            local activeIndicator = Instance.new("Frame")
+            activeIndicator.Size = UDim2.new(0, 4 * SC, 0, 4 * SC)
+            activeIndicator.Position = UDim2.new(0, 6 * SC, 0.5, -2 * SC)
+            activeIndicator.BackgroundColor3 = C.GRN_BRIGHT
+            activeIndicator.ZIndex = 14
+            activeIndicator.Parent = row
+            Instance.new("UICorner", activeIndicator).CornerRadius = UDim.new(1, 0)
+        end
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Text = cfgName
+        nameLabel.TextColor3 = ST.ActiveConfig == cfgName and C.GRN_BRIGHT or C.TXT
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 13 * SC
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Size = UDim2.new(0.4, 0, 1, 0)
+        nameLabel.Position = UDim2.new(0, 16 * SC, 0, 0)
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.ZIndex = 13
+        nameLabel.Parent = row
+
+        -- Load button
+        local loadBtn = Instance.new("TextButton")
+        loadBtn.Text = "LOAD"
+        loadBtn.TextColor3 = C.GRN
+        loadBtn.Font = Enum.Font.GothamBlack
+        loadBtn.TextSize = 10 * SC
+        loadBtn.BackgroundColor3 = C.BG
+        loadBtn.BackgroundTransparency = 0.5
+        loadBtn.Size = UDim2.new(0, 50 * SC, 0, 26 * SC)
+        loadBtn.Position = UDim2.new(0.45, 0, 0.5, -13 * SC)
+        loadBtn.ZIndex = 13
+        loadBtn.Parent = row
+        Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 6)
+        Hover(loadBtn, C.HVR, C.BG)
+
+        -- Edit button
+        local editBtn = Instance.new("TextButton")
+        editBtn.Text = "EDIT"
+        editBtn.TextColor3 = C.YEL
+        editBtn.Font = Enum.Font.GothamBlack
+        editBtn.TextSize = 10 * SC
+        editBtn.BackgroundColor3 = C.BG
+        editBtn.BackgroundTransparency = 0.5
+        editBtn.Size = UDim2.new(0, 50 * SC, 0, 26 * SC)
+        editBtn.Position = UDim2.new(0.45, 56 * SC, 0.5, -13 * SC)
+        editBtn.ZIndex = 13
+        editBtn.Parent = row
+        Instance.new("UICorner", editBtn).CornerRadius = UDim.new(0, 6)
+        Hover(editBtn, C.HVR, C.BG)
+
+        -- Delete button
+        local delBtn = Instance.new("TextButton")
+        delBtn.Text = "DEL"
+        delBtn.TextColor3 = C.RED
+        delBtn.Font = Enum.Font.GothamBlack
+        delBtn.TextSize = 10 * SC
+        delBtn.BackgroundColor3 = C.BG
+        delBtn.BackgroundTransparency = 0.5
+        delBtn.Size = UDim2.new(0, 40 * SC, 0, 26 * SC)
+        delBtn.Position = UDim2.new(1, -48 * SC, 0.5, -13 * SC)
+        delBtn.ZIndex = 13
+        delBtn.Parent = row
+        Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 6)
+        Hover(delBtn, C.HVR, C.BG)
+
+        loadBtn.MouseButton1Click:Connect(function()
+            LoadConfig(cfgName)
+            RefreshConfigList()
+            Notify("EXTERNAL HUB", "Config loaded: " .. cfgName, 2, C.GRN)
+        end)
+
+        editBtn.MouseButton1Click:Connect(function()
+            -- Show edit dialog
+            ConfigNameInput.Text = cfgName
+            SaveConfig(cfgName)
+            RefreshConfigList()
+            Notify("EXTERNAL HUB", "Config updated: " .. cfgName, 2, C.YEL)
+        end)
+
+        delBtn.MouseButton1Click:Connect(function()
+            DeleteConfig(cfgName)
+            RefreshConfigList()
+            Notify("EXTERNAL HUB", "Config deleted: " .. cfgName, 2, C.RED)
+        end)
+    end
+end
+
+-- Load saved configs
+pcall(function()
+    if isfile and isfile(CONFIGS_KEY) then
+        local data = readfile(CONFIGS_KEY)
+        if data and data ~= "" then
+            local decoded = HttpService:JSONDecode(data)
+            if type(decoded) == "table" then
+                ST.Configs = decoded
+            end
+        end
+    end
+end)
+
+-- ===== SHOW/HIDE CONFIG UI =====
+function ShowConfigUI()
+    if not ConfigGui then
+        BuildConfigUI()
+    end
+    ST.ConfigUIVisible = true
+    ConfigGui.Enabled = true
+    RefreshConfigList()
+
+    -- Animate in
+    ConfigMainFrame.Size = UDim2.new(0, 360 * SC, 0, 450 * SC)
+    ConfigMainFrame.Position = UDim2.new(0.5, -180 * SC, 0.5, -225 * SC)
+    TweenService:Create(ConfigMainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 400 * SC, 0, 500 * SC),
+        Position = UDim2.new(0.5, -200 * SC, 0.5, -250 * SC)
+    }):Play()
+end
+
+function HideConfigUI()
+    ST.ConfigUIVisible = false
+    if ConfigGui then
+        -- Animate out
+        TweenService:Create(ConfigMainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 360 * SC, 0, 450 * SC),
+            Position = UDim2.new(0.5, -180 * SC, 0.5, -225 * SC)
+        }):Play()
+        task.delay(0.3, function()
+            if ConfigGui then
+                ConfigGui.Enabled = false
+            end
+        end)
+    end
+    SaveSave()
+end
 
 -- ===== TOGGLE VISUAL FUNCTIONS =====
 local function setToggleVisual(st)
@@ -3198,7 +3853,7 @@ local function setToggleVisual(st)
     LG.StatusLbl.TextColor3 = st and col or C.RED
 end
 
-local function UpdateMode()
+function UpdateMode()
     if ModeLabel then
         ModeLabel.Text = L("mode") .. ": " .. L(ST.SpdMode:lower())
     end
@@ -3229,7 +3884,7 @@ local function toggleLagger()
     setToggleVisual(LAG_ST.LaggerOn)
 end
 
--- ===== SYNC TOGGLES (NOW PROPERLY DEFINED) =====
+-- ===== SYNC TOGGLES =====
 SyncToggles = function()
     FB.Lock:SetAttribute("On", ST.LockOn)
     FB.TPD:SetAttribute("On", false)
@@ -3244,15 +3899,14 @@ SyncToggles = function()
     SB.ATPD:SetAttribute("On", ST.AutoTPDOn)
     SB.Lag:SetAttribute("On", ST.AntiLagOn)
     SB.FP:SetAttribute("On", ST.FPSBoostOn)
-    SB.MUI:SetAttribute("On", ST.EditMode)
+    SB.Config:SetAttribute("On", ST.ConfigUIVisible)
     FB.AL:SetAttribute("On", ST.AutoLeftOn)
     FB.AR:SetAttribute("On", ST.AutoRightOn)
 end
 
 -- ===== BUTTON CONNECTIONS =====
-LG.TogBtn.MouseButton1Click:Connect(function() if ST.EditMode then return end toggleLagger() end)
+LG.TogBtn.MouseButton1Click:Connect(function() toggleLagger() end)
 LG.KeyBtn.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     LAG_ST.listening = true
     LG.KeyBtn.Text = "[ ... ]"
     TweenService:Create(LG.KeyBtn, TweenInfo.new(0.3), { TextColor3 = C.GRN }):Play()
@@ -3305,12 +3959,11 @@ Trk(UIS.InputBegan:Connect(function(input, gpe)
     end
 end))
 
-FB.Lock.MouseButton1Click:Connect(function() if ST.EditMode then return end tLK() SyncToggles() end)
-FB.TPD.MouseButton1Click:Connect(function() if ST.EditMode then return end DoTPDown() end)
-FB.Drop.MouseButton1Click:Connect(function() if ST.EditMode then return end DoDrop() end)
-FB.IRS.MouseButton1Click:Connect(function() if ST.EditMode then return end IRS_ActivateReset() end)
+FB.Lock.MouseButton1Click:Connect(function() tLK() SyncToggles() end)
+FB.TPD.MouseButton1Click:Connect(function() DoTPDown() end)
+FB.Drop.MouseButton1Click:Connect(function() DoDrop() end)
+FB.IRS.MouseButton1Click:Connect(function() IRS_ActivateReset() end)
 FB.Mode.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     if ST.SpdMode == "NORMAL" then
         ST.SpdMode = "LAGGER"
         BX.J.Text = tostring(LIMITS.LAGGER_JUMP)
@@ -3322,23 +3975,19 @@ FB.Mode.MouseButton1Click:Connect(function()
     SyncToggles()
 end)
 FB.AL.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     if ST.AutoLeftOn then StopAutoMove() else StartAutoMove("AUTO_LEFT") end
 end)
 FB.AR.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     if ST.AutoRightOn then StopAutoMove() else StartAutoMove("AUTO_RIGHT") end
 end)
-SB.Spd.MouseButton1Click:Connect(function() if ST.EditMode then return end ToggleSpeed() SyncToggles() end)
-SB.IJ.MouseButton1Click:Connect(function() if ST.EditMode then return end ToggleInfJump() SyncToggles() end)
+SB.Spd.MouseButton1Click:Connect(function() ToggleSpeed() SyncToggles() end)
+SB.IJ.MouseButton1Click:Connect(function() ToggleInfJump() SyncToggles() end)
 SB.Bat.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     ST.BatCntOn = not ST.BatCntOn
     if ST.BatCntOn then StartBC() else StopBC() end
     SyncToggles()
 end)
 SB.Med.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     ST.MedCntOn = not ST.MedCntOn
     if ST.MedCntOn then
         if LP.Character then SetupMed(LP.Character) end
@@ -3348,21 +3997,19 @@ SB.Med.MouseButton1Click:Connect(function()
     end
     SyncToggles()
 end)
-SB.Rag.MouseButton1Click:Connect(function() if ST.EditMode then return end EnableAR() SyncToggles() end)
+SB.Rag.MouseButton1Click:Connect(function() EnableAR() SyncToggles() end)
 SB.ATPD.MouseButton1Click:Connect(function()
-    if ST.EditMode then return end
     ST.AutoTPDOn = not ST.AutoTPDOn
     ToggleATPD(ST.AutoTPDOn)
     SyncToggles()
 end)
-SB.Lag.MouseButton1Click:Connect(function() if ST.EditMode then return end ToggleALag() SyncToggles() end)
-SB.FP.MouseButton1Click:Connect(function() if ST.EditMode then return end ToggleFPS() SyncToggles() end)
+SB.Lag.MouseButton1Click:Connect(function() ToggleALag() SyncToggles() end)
+SB.FP.MouseButton1Click:Connect(function() ToggleFPS() SyncToggles() end)
 
 UpdateMode()
 SyncToggles()
 
 -- ===== BACKGROUND LOOPS =====
--- Steal progress bar
 task.spawn(function()
     while _G.ExtRunning and CoreActive do
         pcall(function()
@@ -3382,9 +4029,8 @@ task.spawn(function()
     end
 end)
 
--- ===== AUTO-SAVE EVERY 2 SECONDS + CORRECT VALUES =====
 task.spawn(function()
-    task.wait(2) -- Initial delay to let UI settle
+    task.wait(2)
     while _G.ExtRunning and CoreActive do
         CorrectTextBoxes()
         SaveSave()
@@ -3392,7 +4038,6 @@ task.spawn(function()
     end
 end)
 
--- Sync lock state
 task.spawn(function()
     while _G.ExtRunning and CoreActive do
         if ST.LockOn ~= FB.Lock:GetAttribute("On") then
@@ -3402,7 +4047,6 @@ task.spawn(function()
     end
 end)
 
--- ===== ANTI-EXPLOIT: CLEANUP DISCONNECTED PLAYERS =====
 task.spawn(function()
     while _G.ExtRunning and CoreActive do
         for player, _ in pairs(ST.TargetPosHistory) do
@@ -3429,655 +4073,4 @@ local function ProtectGui(g)
 end
 ProtectGui(MainFolder)
 
--- ===== EDIT MODE SYSTEM (UI CUSTOMIZATION) =====
-local EditBgMain = nil   -- black bg in EditOverlayGui
-local EditLogoFrame = nil
-local EditBtnFrame = nil
-local ConfigListFrame = nil
-
--- Default positions for reset
-local DEFAULT_POSITIONS = {
-    FloatAutoRight = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.5, Offset = -(72 + 6) * 0.5 * SC}},
-    FloatAutoLeft = {X = {Scale = 1, Offset = -(15 + 72 + 6 + 72) * SC}, Y = {Scale = 0.5, Offset = -(72 + 6) * 0.5 * SC}},
-    FloatDrop = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.5, Offset = (72 + 6) * 0.5 * SC}},
-    FloatTPDown = {X = {Scale = 1, Offset = -(15 + 72 + 6 + 72) * SC}, Y = {Scale = 0.5, Offset = (72 + 6) * 0.5 * SC}},
-    FloatMode = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.5, Offset = (72 + 6) * 1.5 * SC}},
-    FloatLock = {X = {Scale = 1, Offset = -(15 + 72 + 6 + 72) * SC}, Y = {Scale = 0.5, Offset = (72 + 6) * 1.5 * SC}},
-    FloatInstaReset = {X = {Scale = 1, Offset = -(15 + 72) * SC}, Y = {Scale = 0.5, Offset = (72 + 6) * 2.5 * SC}},
-    SpeedPanel = {X = {Scale = 0, Offset = 20 * SC}, Y = {Scale = 0, Offset = 260 * SC}},
-    ControlsPanel = {X = {Scale = 0, Offset = 355 * SC}, Y = {Scale = 0, Offset = 260 * SC}},
-    HubPanel = {X = {Scale = 0.5, Offset = -140 * SC}, Y = {Scale = 1, Offset = -80 * SC}},
-    LaggerPanel = {X = {Scale = 0.5, Offset = -130 * SC}, Y = {Scale = 0.08, Offset = 0}},
-}
-
-local function SaveEditConfig(name)
-    if not name or name == "" then return end
-    local cfg = {
-        Positions = {},
-        Speeds = {},
-        Mode = ST.SpdMode,
-    }
-    for k, elem in pairs(UIElements) do
-        if elem and elem.Parent then
-            cfg.Positions[k] = {
-                X = {Scale = elem.Position.X.Scale, Offset = elem.Position.X.Offset},
-                Y = {Scale = elem.Position.Y.Scale, Offset = elem.Position.Y.Offset},
-            }
-        end
-    end
-    for k, bx in pairs(BX) do
-        if bx and bx.Parent and tonumber(bx.Text) then
-            cfg.Speeds[k] = bx.Text
-        end
-    end
-    ST.EditConfigs[name] = cfg
-    pcall(function()
-        if writefile then
-            writefile("ExternalHub_EditConfigs", HttpService:JSONEncode(ST.EditConfigs))
-        end
-    end)
-end
-
-local function LoadEditConfig(name)
-    if not name or not ST.EditConfigs[name] then return end
-    local cfg = ST.EditConfigs[name]
-    if cfg.Positions then
-        for k, pos in pairs(cfg.Positions) do
-            local elem = UIElements[k]
-            if elem and elem.Parent and pos.X and pos.Y then
-                pcall(function()
-                    -- SMOOTH TWEEN instead of instant teleport
-                    TweenService:Create(elem, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                        Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
-                    }):Play()
-                end)
-            end
-        end
-    end
-    if cfg.Speeds then
-        for k, val in pairs(cfg.Speeds) do
-            if BX[k] and BX[k].Parent and tonumber(val) then
-                BX[k].Text = tostring(val)
-            end
-        end
-    end
-    if cfg.Mode then
-        ST.SpdMode = cfg.Mode
-        UpdateMode()
-    end
-    ST.ActiveConfigName = name
-end
-
-local function DeleteEditConfig(name)
-    if not name then return end
-    ST.EditConfigs[name] = nil
-    if ST.ActiveConfigName == name then
-        ST.ActiveConfigName = nil
-    end
-    pcall(function()
-        if writefile then
-            writefile("ExternalHub_EditConfigs", HttpService:JSONEncode(ST.EditConfigs))
-        end
-    end)
-end
-
-local function ResetToDefaults()
-    for name, pos in pairs(DEFAULT_POSITIONS) do
-        local elem = UIElements[name]
-        if elem and elem.Parent then
-            pcall(function()
-                TweenService:Create(elem, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
-                    Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
-                }):Play()
-            end)
-        end
-    end
-    -- Reset speeds
-    BX.N.Text = "58"
-    BX.S.Text = "28"
-    BX.J.Text = tostring(LIMITS.NORMAL_JUMP)
-    BX.TPD.Text = "6"
-    BX.LN.Text = tostring(LIMITS.LAG_NORMAL_SPD)
-    BX.LS.Text = tostring(LIMITS.LAG_STEAL_SPD)
-    ST.SpdMode = "NORMAL"
-    UpdateMode()
-    ST.ActiveConfigName = nil
-end
-
--- Load saved configs
-pcall(function()
-    if isfile and isfile("ExternalHub_EditConfigs") then
-        local data = readfile("ExternalHub_EditConfigs")
-        if data and data ~= "" then
-            local decoded = HttpService:JSONDecode(data)
-            if type(decoded) == "table" then
-                ST.EditConfigs = decoded
-            end
-        end
-    end
-end)
-
--- ===== EDIT MODE LOGO (clean, no glow/particles) =====
-local function CreateEditLogo(parent)
-    local logoFrame = Instance.new("Frame")
-    logoFrame.Name = "EditLogo"
-    logoFrame.Size = UDim2.new(0, 320 * SC, 0, 70 * SC)
-    logoFrame.Position = UDim2.new(0.5, -160 * SC, 0.5, -35 * SC)
-    logoFrame.BackgroundTransparency = 1
-    logoFrame.ZIndex = 2 -- Above the black bg (ZIndex 1) in the overlay gui
-    logoFrame.Parent = parent
-
-    local title = Instance.new("TextLabel")
-    title.Text = "EXTERNAL HUB"
-    title.TextColor3 = C.GRN_BRIGHT
-    title.Font = Enum.Font.GothamBlack
-    title.TextSize = 28 * SC
-    title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, 0, 0.55, 0)
-    title.ZIndex = 3
-    title.Parent = logoFrame
-
-    local subtitle = Instance.new("TextLabel")
-    subtitle.Text = "UI EDITOR - Drag panels to reposition"
-    subtitle.TextColor3 = C.GRN
-    subtitle.Font = Enum.Font.GothamBold
-    subtitle.TextSize = 13 * SC
-    subtitle.BackgroundTransparency = 1
-    subtitle.Size = UDim2.new(1, 0, 0.45, 0)
-    subtitle.Position = UDim2.new(0, 0, 0.55, 0)
-    subtitle.ZIndex = 3
-    subtitle.Parent = logoFrame
-
-    return logoFrame
-end
-
--- ===== EDIT MODE CONTROL BAR =====
-local function CreateEditControls(parent)
-    local bar = Instance.new("Frame")
-    bar.Name = "EditControls"
-    bar.Size = UDim2.new(0, 310 * SC, 0, 50 * SC)
-    bar.Position = UDim2.new(0.5, -155 * SC, 1, -70 * SC)
-    bar.BackgroundColor3 = C.BG
-    bar.BackgroundTransparency = 0.2
-    bar.ZIndex = 100
-    bar.Parent = parent
-    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 12)
-    do local s = Instance.new("UIStroke")
-    s.Thickness = 2
-    s.Color = C.GRN
-    s.Parent = bar
-    BorderGrad(s) end
-
-    -- Save & Exit Button
-    local saveExitBtn = Instance.new("TextButton")
-    saveExitBtn.Text = "Save & Exit"
-    saveExitBtn.TextColor3 = C.BG
-    saveExitBtn.Font = Enum.Font.GothamBlack
-    saveExitBtn.TextSize = 12 * SC
-    saveExitBtn.BackgroundColor3 = C.GRN
-    saveExitBtn.Size = UDim2.new(0, 100 * SC, 0, 30 * SC)
-    saveExitBtn.Position = UDim2.new(0, 15 * SC, 0.5, -15 * SC)
-    saveExitBtn.ZIndex = 101
-    saveExitBtn.Parent = bar
-    Instance.new("UICorner", saveExitBtn).CornerRadius = UDim.new(0, 8)
-    Hover(saveExitBtn, C.GRN_BRIGHT, C.GRN)
-    ClkFX(saveExitBtn)
-
-    -- Reset Button
-    local resetBtn = Instance.new("TextButton")
-    resetBtn.Text = "Reset"
-    resetBtn.TextColor3 = C.TXT
-    resetBtn.Font = Enum.Font.GothamBlack
-    resetBtn.TextSize = 12 * SC
-    resetBtn.BackgroundColor3 = C.DRK
-    resetBtn.Size = UDim2.new(0, 80 * SC, 0, 30 * SC)
-    resetBtn.Position = UDim2.new(0, 125 * SC, 0.5, -15 * SC)
-    resetBtn.ZIndex = 101
-    resetBtn.Parent = bar
-    Instance.new("UICorner", resetBtn).CornerRadius = UDim.new(0, 8)
-    do local s = Instance.new("UIStroke")
-    s.Thickness = 1
-    s.Color = C.RED
-    s.Parent = resetBtn end
-    Hover(resetBtn, C.HVR, C.DRK)
-    ClkFX(resetBtn)
-
-    -- Configs List Button (opens the config list panel)
-    local cfgListBtn = Instance.new("TextButton")
-    cfgListBtn.Text = "Configs"
-    cfgListBtn.TextColor3 = C.TXT
-    cfgListBtn.Font = Enum.Font.GothamBlack
-    cfgListBtn.TextSize = 10 * SC
-    cfgListBtn.BackgroundColor3 = C.DRK
-    cfgListBtn.Size = UDim2.new(0, 80 * SC, 0, 30 * SC)
-    cfgListBtn.Position = UDim2.new(0, 215 * SC, 0.5, -15 * SC)
-    cfgListBtn.ZIndex = 101
-    cfgListBtn.Parent = bar
-    Instance.new("UICorner", cfgListBtn).CornerRadius = UDim.new(0, 8)
-    do local s = Instance.new("UIStroke")
-    s.Thickness = 1
-    s.Color = C.GRN
-    s.Parent = cfgListBtn end
-    Hover(cfgListBtn, C.HVR, C.DRK)
-    ClkFX(cfgListBtn)
-
-    -- ===== CONFIG LIST PANEL (left side, scrolling, no glow) =====
-    local cfgPanel = Instance.new("Frame")
-    cfgPanel.Name = "ConfigListPanel"
-    cfgPanel.Size = UDim2.new(0, 180 * SC, 0, 320 * SC)
-    cfgPanel.Position = UDim2.new(0, 10 * SC, 0.5, -160 * SC)
-    cfgPanel.BackgroundColor3 = C.BG
-    cfgPanel.BackgroundTransparency = 0.1
-    cfgPanel.ZIndex = 200
-    cfgPanel.Visible = false
-    cfgPanel.ClipsDescendants = true
-    cfgPanel.Parent = parent
-    Instance.new("UICorner", cfgPanel).CornerRadius = UDim.new(0, 10)
-    do local s = Instance.new("UIStroke")
-    s.Thickness = 1.5
-    s.Color = C.GRN
-    s.Parent = cfgPanel end
-
-    -- Panel title
-    local cfgTitle = Instance.new("TextLabel")
-    cfgTitle.Text = "CONFIGS"
-    cfgTitle.TextColor3 = C.GRN
-    cfgTitle.Font = Enum.Font.GothamBlack
-    cfgTitle.TextSize = 14 * SC
-    cfgTitle.BackgroundTransparency = 1
-    cfgTitle.Size = UDim2.new(1, 0, 0, 28 * SC)
-    cfgTitle.Position = UDim2.new(0, 0, 0, 4 * SC)
-    cfgTitle.ZIndex = 201
-    cfgTitle.Parent = cfgPanel
-
-    -- Scroll frame for config list (takes up space between title and save button)
-    local scrollFrame = Instance.new("ScrollingFrame")
-    scrollFrame.Name = "ConfigScroll"
-    scrollFrame.Size = UDim2.new(1, -10 * SC, 1, -72 * SC)
-    scrollFrame.Position = UDim2.new(0, 5 * SC, 0, 32 * SC)
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.ScrollBarThickness = 4
-    scrollFrame.ScrollBarImageColor3 = C.GRN
-    scrollFrame.BorderSizePixel = 0
-    scrollFrame.ZIndex = 201
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scrollFrame.Parent = cfgPanel
-
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Padding = UDim.new(0, 4 * SC)
-    listLayout.Parent = scrollFrame
-
-    -- Save new config button at bottom of panel
-    local saveNewBtn = Instance.new("TextButton")
-    saveNewBtn.Text = "+ Save Current"
-    saveNewBtn.TextColor3 = C.BG
-    saveNewBtn.Font = Enum.Font.GothamBlack
-    saveNewBtn.TextSize = 10 * SC
-    saveNewBtn.BackgroundColor3 = C.GRN
-    saveNewBtn.Size = UDim2.new(1, -10 * SC, 0, 28 * SC)
-    saveNewBtn.Position = UDim2.new(0, 5 * SC, 1, -34 * SC)
-    saveNewBtn.ZIndex = 201
-    saveNewBtn.Parent = cfgPanel
-    Instance.new("UICorner", saveNewBtn).CornerRadius = UDim.new(0, 6)
-    Hover(saveNewBtn, C.GRN_BRIGHT, C.GRN)
-    ClkFX(saveNewBtn)
-
-    -- Auto-name generator for configs
-    local function GetNextConfigName()
-        local i = 1
-        while ST.EditConfigs["Config" .. tostring(i)] do
-            i = i + 1
-        end
-        return "Config" .. tostring(i)
-    end
-
-    -- Function to refresh the config list
-    local function RefreshConfigList()
-        for _, child in ipairs(scrollFrame:GetChildren()) do
-            if child:IsA("Frame") then
-                pcall(function() child:Destroy() end)
-            end
-        end
-
-        -- Sort config names alphabetically for consistent order
-        local sortedNames = {}
-        for cfgName, _ in pairs(ST.EditConfigs) do
-            table.insert(sortedNames, cfgName)
-        end
-        table.sort(sortedNames)
-
-        for _, cfgName in ipairs(sortedNames) do
-            local row = Instance.new("Frame")
-            row.Name = "CfgRow_" .. cfgName
-            row.BackgroundColor3 = C.DRK
-            row.BackgroundTransparency = 0.3
-            row.Size = UDim2.new(1, 0, 0, 32 * SC)
-            row.ZIndex = 202
-            row.Parent = scrollFrame
-            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-            do local s = Instance.new("UIStroke")
-            s.Thickness = 0.5
-            s.Color = C.GRN
-            s.Transparency = 0.5
-            s.Parent = row end
-
-            -- Config name label
-            local nameLabel = Instance.new("TextLabel")
-            nameLabel.Text = cfgName
-            nameLabel.TextColor3 = C.TXT
-            nameLabel.Font = Enum.Font.GothamBold
-            nameLabel.TextSize = 11 * SC
-            nameLabel.BackgroundTransparency = 1
-            nameLabel.Size = UDim2.new(0.5, 0, 1, 0)
-            nameLabel.Position = UDim2.new(0, 6 * SC, 0, 0)
-            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-            nameLabel.ZIndex = 203
-            nameLabel.Parent = row
-
-            -- Active indicator
-            if ST.ActiveConfigName == cfgName then
-                nameLabel.TextColor3 = C.GRN_BRIGHT
-                local activeDot = Instance.new("Frame")
-                activeDot.Size = UDim2.new(0, 4 * SC, 0, 4 * SC)
-                activeDot.Position = UDim2.new(0, 1 * SC, 0.5, -2 * SC)
-                activeDot.BackgroundColor3 = C.GRN_BRIGHT
-                activeDot.ZIndex = 204
-                activeDot.Parent = row
-                Instance.new("UICorner", activeDot).CornerRadius = UDim.new(1, 0)
-            end
-
-            -- Load button
-            local loadBtn = Instance.new("TextButton")
-            loadBtn.Text = "Load"
-            loadBtn.TextColor3 = C.GRN
-            loadBtn.Font = Enum.Font.GothamBold
-            loadBtn.TextSize = 9 * SC
-            loadBtn.BackgroundColor3 = C.BG
-            loadBtn.BackgroundTransparency = 0.5
-            loadBtn.Size = UDim2.new(0, 36 * SC, 0, 22 * SC)
-            loadBtn.Position = UDim2.new(0.5, 2 * SC, 0.5, -11 * SC)
-            loadBtn.ZIndex = 203
-            loadBtn.Parent = row
-            Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 4)
-            Hover(loadBtn, C.HVR, C.BG)
-
-            -- Delete button
-            local delBtn = Instance.new("TextButton")
-            delBtn.Text = "Del"
-            delBtn.TextColor3 = C.RED
-            delBtn.Font = Enum.Font.GothamBold
-            delBtn.TextSize = 9 * SC
-            delBtn.BackgroundColor3 = C.BG
-            delBtn.BackgroundTransparency = 0.5
-            delBtn.Size = UDim2.new(0, 30 * SC, 0, 22 * SC)
-            delBtn.Position = UDim2.new(1, -36 * SC, 0.5, -11 * SC)
-            delBtn.ZIndex = 203
-            delBtn.Parent = row
-            Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
-            Hover(delBtn, C.HVR, C.BG)
-
-            -- Wire load button
-            loadBtn.MouseButton1Click:Connect(function()
-                LoadEditConfig(cfgName)
-                RefreshConfigList()
-                Notify("EXTERNAL HUB", "Config loaded: " .. cfgName, 2, C.GRN)
-            end)
-
-            -- Wire delete button
-            delBtn.MouseButton1Click:Connect(function()
-                DeleteEditConfig(cfgName)
-                RefreshConfigList()
-                Notify("EXTERNAL HUB", "Config deleted: " .. cfgName, 2, C.RED)
-            end)
-        end
-    end
-
-    -- Toggle config panel visibility
-    local cfgPanelVisible = false
-    cfgListBtn.MouseButton1Click:Connect(function()
-        cfgPanelVisible = not cfgPanelVisible
-        cfgPanel.Visible = cfgPanelVisible
-        if cfgPanelVisible then
-            RefreshConfigList()
-        end
-    end)
-
-    -- Wire buttons
-    saveExitBtn.MouseButton1Click:Connect(function()
-        SaveSave()
-        cfgPanelVisible = false
-        cfgPanel.Visible = false
-        ExitEditMode()
-    end)
-
-    resetBtn.MouseButton1Click:Connect(function()
-        ResetToDefaults()
-        RefreshConfigList()
-        Notify("EXTERNAL HUB", "Reset to defaults!", 2, C.YEL)
-    end)
-
-    saveNewBtn.MouseButton1Click:Connect(function()
-        local name = GetNextConfigName()
-        SaveEditConfig(name)
-        RefreshConfigList()
-        Notify("EXTERNAL HUB", "Config saved: " .. name, 2, C.GRN)
-    end)
-
-    return bar, cfgPanel
-end
-
--- ===== EDIT MODE HIGHLIGHT BORDERS =====
-local EditHighlights = {}
-
-local function ShowEditHighlights()
-    for _, hl in ipairs(EditHighlights) do
-        pcall(function() hl:Destroy() end)
-    end
-    EditHighlights = {}
-    for name, elem in pairs(UIElements) do
-        if elem and elem.Parent then
-            local hl = Instance.new("UIStroke")
-            hl.Name = "EditHighlight"
-            hl.Thickness = 3
-            hl.Color = C.YEL
-            hl.Parent = elem
-            table.insert(EditHighlights, hl)
-            -- Pulse animation
-            task.spawn(function()
-                while hl and hl.Parent and ST.EditMode do
-                    TweenService:Create(hl, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Thickness = 5, Color = C.GRN_BRIGHT}):Play()
-                    task.wait(0.5)
-                    TweenService:Create(hl, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Thickness = 2, Color = C.YEL}):Play()
-                    task.wait(0.5)
-                end
-            end)
-        end
-    end
-end
-
-local function HideEditHighlights()
-    for _, hl in ipairs(EditHighlights) do
-        pcall(function() hl:Destroy() end)
-    end
-    EditHighlights = {}
-end
-
--- ===== ENTER / EXIT EDIT MODE =====
--- Uses a SEPARATE ScreenGui with LOWER DisplayOrder for the black overlay.
--- This guarantees panels (in MainGui/LaggerGui) ALWAYS render ABOVE the black frame.
--- EditOverlayGui (DisplayOrder = -1) → black bg + logo → BEHIND everything
--- MainGui (DisplayOrder = 0) → all panels → ABOVE overlay
--- LaggerGui (DisplayOrder = 0) → lagger panel → ABOVE overlay
-local EditOverlayGui = nil
-
-function EnterEditMode()
-    if ST.EditMode then return end
-    ST.EditMode = true
-
-    -- === SEPARATE SCREENGUI FOR BLACK OVERLAY ===
-    -- This ScreenGui sits BEHIND MainGui and LaggerGui via DisplayOrder
-    EditOverlayGui = Instance.new("ScreenGui")
-    EditOverlayGui.Name = "ExtEditOverlay"
-    EditOverlayGui.ResetOnSpawn = false
-    EditOverlayGui.DisplayOrder = -1  -- Below MainGui (0) and LaggerGui (0)
-    EditOverlayGui.Parent = MainFolder
-
-    -- Black background (starts transparent for fade-in animation)
-    EditBgMain = Instance.new("Frame")
-    EditBgMain.Name = "EditBg"
-    EditBgMain.Size = UDim2.new(1, 0, 1, 0)
-    EditBgMain.BackgroundColor3 = Color3.new(0, 0, 0)
-    EditBgMain.BackgroundTransparency = 1
-    EditBgMain.ZIndex = 1
-    EditBgMain.Parent = EditOverlayGui
-
-    -- Logo in center (inside overlay gui, so it's behind the panels)
-    EditLogoFrame = CreateEditLogo(EditOverlayGui)
-
-    -- Edit controls bar at bottom (inside MainGui so it's above panels)
-    EditBtnFrame, ConfigListFrame = CreateEditControls(MainGui)
-
-    -- Play enter sound
-    pcall(function()
-        local snd = Instance.new("Sound")
-        snd.SoundId = "rbxassetid://6895079853"
-        snd.Volume = 0.5
-        snd.PlayOnRemove = true
-        snd.Parent = MainFolder
-        snd:Destroy()
-    end)
-
-    -- === ENTRY ANIMATIONS ===
-    -- Fade in black background
-    TweenService:Create(EditBgMain, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {BackgroundTransparency = 0}):Play()
-
-    -- Slide in edit controls from bottom (starts off-screen below)
-    local finalBarPos = EditBtnFrame.Position
-    EditBtnFrame.Position = UDim2.new(finalBarPos.X.Scale, finalBarPos.X.Offset, 1, 60 * SC)
-    TweenService:Create(EditBtnFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = finalBarPos}):Play()
-
-    -- Fade in logo text with scale-up effect
-    if EditLogoFrame then
-        for _, child in ipairs(EditLogoFrame:GetChildren()) do
-            if child:IsA("TextLabel") then
-                child.TextTransparency = 1
-                child.TextSize = child.TextSize * 0.5
-                TweenService:Create(child, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
-                -- Scale up text size after a short delay
-                local targetSize = child.TextSize * 2
-                task.delay(0.1, function()
-                    if child and child.Parent then
-                        TweenService:Create(child, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {TextSize = targetSize}):Play()
-                    end
-                end)
-            end
-        end
-    end
-
-    -- FREEZE PLAYER: Set WalkSpeed to 0 and disable controls
-    pcall(function()
-        local char = LP.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                ST._SavedWalkSpeed = hum.WalkSpeed
-                hum.WalkSpeed = 0
-            end
-        end
-    end)
-    pcall(function()
-        require(LP:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls():Disable()
-    end)
-
-    -- Show highlight borders on movable elements
-    ShowEditHighlights()
-
-    -- Update toggle visuals
-    if SyncToggles then SyncToggles() end
-
-    Notify("EXTERNAL HUB", "Edit Mode ON - Drag panels to customize!", 3, C.YEL)
-end
-
-function ExitEditMode()
-    if not ST.EditMode then return end
-
-    -- Play exit sound
-    pcall(function()
-        local snd = Instance.new("Sound")
-        snd.SoundId = "rbxassetid://6895079853"
-        snd.Volume = 0.3
-        snd.PlayOnRemove = true
-        snd.Parent = MainFolder
-        snd:Destroy()
-    end)
-
-    -- === EXIT ANIMATIONS ===
-    -- Fade out black background
-    if EditBgMain then
-        TweenService:Create(EditBgMain, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
-    end
-
-    -- Slide out edit controls to bottom
-    if EditBtnFrame then
-        TweenService:Create(EditBtnFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -155 * SC, 1, 60 * SC)}):Play()
-    end
-
-    -- Fade out logo text
-    if EditLogoFrame then
-        for _, child in ipairs(EditLogoFrame:GetChildren()) do
-            if child:IsA("TextLabel") then
-                TweenService:Create(child, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {TextTransparency = 1}):Play()
-            end
-        end
-    end
-
-    -- UNFREEZE PLAYER: Restore WalkSpeed and re-enable controls
-    pcall(function()
-        local char = LP.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum and ST._SavedWalkSpeed then
-                hum.WalkSpeed = ST._SavedWalkSpeed
-                ST._SavedWalkSpeed = nil
-            end
-        end
-    end)
-    pcall(function()
-        require(LP:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls():Enable()
-    end)
-
-    -- Hide highlight borders
-    HideEditHighlights()
-
-    -- After animation completes, destroy all edit mode elements
-    task.delay(0.5, function()
-        if EditBgMain then pcall(function() EditBgMain:Destroy() end) end
-        EditBgMain = nil
-        if EditLogoFrame then pcall(function() EditLogoFrame:Destroy() end) end
-        EditLogoFrame = nil
-        if EditBtnFrame then pcall(function() EditBtnFrame:Destroy() end) end
-        EditBtnFrame = nil
-        if ConfigListFrame then pcall(function() ConfigListFrame:Destroy() end) end
-        ConfigListFrame = nil
-        -- Destroy the entire overlay ScreenGui
-        if EditOverlayGui then
-            pcall(function() EditOverlayGui:Destroy() end)
-            EditOverlayGui = nil
-        end
-    end)
-
-    ST.EditMode = false
-
-    -- Save positions
-    SaveSave()
-
-    -- Update toggle visuals
-    if SyncToggles then SyncToggles() end
-
-    Notify("EXTERNAL HUB", "Edit Mode OFF - Layout saved!", 2, C.GRN)
-end
-
-Notify("EXTERNAL HUB", L("notif_on") .. " v12.0", 3, C.GRN)
+Notify("EXTERNAL HUB", L("notif_on") .. " v13.0 - Config UI", 3, C.GRN)
