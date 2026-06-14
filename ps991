@@ -162,103 +162,6 @@ do
     task.wait(0.5)
 end
 
--- ===== WHITELIST CHECK =====
-do
-    local WL_OK = false
-    local WL_REASON = ""
-    local WL_ATTEMPTS = 0
-    local MAX_WL_ATTEMPTS = 3
-
-    local function CheckWhitelist()
-        WL_OK = false
-        WL_REASON = ""
-        WL_ATTEMPTS = WL_ATTEMPTS + 1
-
-        local s1, r1 = pcall(function()
-            return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/refs/heads/main/keys.json"))
-        end)
-
-        if s1 and r1 then
-            if type(r1) == "table" and r1.whitelist then
-                for _, id in ipairs(r1.whitelist) do
-                    if tonumber(id) == LP.UserId then
-                        WL_OK = true
-                        WL_REASON = "PRIMARY_OK"
-                        return true
-                    end
-                end
-            end
-            if type(r1) == "table" and r1.whitelist then
-                WL_REASON = "NOT_IN_WHITELIST"
-            else
-                WL_REASON = "INVALID_JSON_FORMAT"
-            end
-        else
-            WL_REASON = "FETCH_FAILED: " .. tostring(r1)
-        end
-
-        if not WL_OK then
-            local s2, r2 = pcall(function()
-                return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/main/keys.json"))
-            end)
-            if s2 and r2 and type(r2) == "table" and r2.whitelist then
-                for _, id in ipairs(r2.whitelist) do
-                    if tonumber(id) == LP.UserId then
-                        WL_OK = true
-                        WL_REASON = "FALLBACK_URL_OK"
-                        return true
-                    end
-                end
-            end
-        end
-
-        if not WL_OK then
-            local s3, cached = pcall(function()
-                if isfile and isfile("ExternalHub_WhitelistCache") then
-                    return HttpService:JSONDecode(readfile("ExternalHub_WhitelistCache"))
-                end
-                return nil
-            end)
-            if s3 and cached and type(cached) == "table" and cached.whitelist then
-                for _, id in ipairs(cached.whitelist) do
-                    if tonumber(id) == LP.UserId then
-                        WL_OK = true
-                        WL_REASON = "CACHED_OK"
-                        return true
-                    end
-                end
-            end
-        end
-        return false
-    end
-
-    for attempt = 1, MAX_WL_ATTEMPTS do
-        CheckWhitelist()
-        if WL_OK then break end
-        if attempt < MAX_WL_ATTEMPTS then
-            task.wait(1.5)
-        end
-    end
-
-    if not WL_OK then
-        pcall(function()
-            local s, r = pcall(function()
-                return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/anwer69699-web/Keysstorage/refs/heads/main/keys.json"))
-            end)
-            if s and r and type(r) == "table" then
-                if writefile then
-                    writefile("ExternalHub_WhitelistCache", HttpService:JSONEncode(r))
-                end
-            end
-        end)
-    end
-
-    if not WL_OK then
-        LP:Kick("Access Denied: " .. WL_REASON .. " | UserId: " .. tostring(LP.UserId) .. " | Attempts: " .. WL_ATTEMPTS)
-        return
-    end
-end
-
 _G.ExtRunning = true
 _G.ExtLagRunning = true
 _G.ExtAllConnections = {}
@@ -322,7 +225,7 @@ local LD = {
         auto_left = "AUTO LEFT", auto_right = "AUTO RIGHT",
         anti_spoof = "ANTI-SPOOF", spoof_detected = "SPOOF DETECTED",
         target_ghosted = "TARGET GHOSTED", lock_broken = "LOCK BROKEN",
-        config = "CONFIG", add_config = "ADD CONFIG", edit_config = "EDIT CONFIG",
+        config = "CONFIG", add_config = "ADD CONFIG",
         delete_config = "DELETE", save_config = "SAVE", load_config = "LOAD",
         config_name = "Config Name", enter_name = "Enter config name...",
         reset = "RESET", exit = "EXIT", move_ui = "MOVE UI",
@@ -967,7 +870,13 @@ local function FindBat()
     if bp then
         for _, i in ipairs(bp:GetChildren()) do
             if i:IsA("Tool") and (i.Name:lower():find("bat") or i.Name:lower():find("baseball")) then
-                pcall(function() LP.Character.Humanoid:EquipTool(i) end)
+                pcall(function()
+                    local ch = LP.Character
+                    if ch then
+                        local hm = ch:FindFirstChildOfClass("Humanoid")
+                        if hm then hm:EquipTool(i) end
+                    end
+                end)
                 task.wait(0.05)
                 return i
             end
@@ -1121,12 +1030,18 @@ local function FindAnyRemote()
 end
 
 -- ===== LAGGER SYSTEM =====
--- ===== SINGLE PAYLOAD REUSE (ZERO BUILD LAG) =====
--- Build ONCE, reuse FOREVER. No memory allocation during lag loop.
--- The SAME table reference is sent every tick - Lua garbage collector
--- never needs to clean up old payloads because nothing new is created.
+-- ===== OPTIMIZED: Same payload, same power, ZERO client waste =====
+-- Build ONCE, reuse FOREVER. Same table reference sent every tick.
+-- Lua tables are references - all 295K entries point to SAME nested object.
+-- GC never runs because nothing new is allocated in the loop.
+-- Removed InvokeServer (sync freeze) → FireServer only (async).
+-- Cached remote → no search per frame.
+-- KBPS limit set ONCE at start, not every frame.
+-- Payload freed on stop → memory reclaimed instantly.
 local ReusablePayload = nil
 local PayloadBuildKey = nil  -- tracks config used to build current payload
+local CachedLagRemote = nil
+local PayloadRebuildTimer = nil
 
 local function BuildPayloadOnce(tc, bs)
     -- Check if we already have a payload for these exact params
@@ -1137,6 +1052,11 @@ local function BuildPayloadOnce(tc, bs)
     -- Build new payload only when config actually changes
     ReusablePayload = nil
     PayloadBuildKey = key
+    -- KEY TRICK: all table.insert(m, n) insert REFERENCES to the SAME table n.
+    -- Lua doesn't copy - it stores a pointer. So 295K entries = ~130KB of pointers,
+    -- not 295K separate table objects.
+    -- The chain: m[1]=n, m[2]=n, m[3]=n... all point to ONE nested structure.
+    -- Serialization cost is O(n) pointers, but client alloc cost is O(1).
     local m = {}
     local n = {}
     local z = n
@@ -1147,18 +1067,28 @@ local function BuildPayloadOnce(tc, bs)
     end
     local mi = math.floor(bs / (tc + 2))
     for i = 1, mi do
-        table.insert(m, n)
+        table.insert(m, n)  -- reference, NOT copy
         if i % 8000 == 0 then task.wait() end
     end
     ReusablePayload = m
     return m
 end
 
--- Rebuild payload when config changes (slider, etc)
+-- Debounced rebuild: waits 0.3s after last call before actually rebuilding
+-- Prevents lag spikes when slider is dragged rapidly (was rebuilding every pixel)
 local function RebuildPayload()
-    ReusablePayload = nil
-    PayloadBuildKey = nil
-    BuildPayloadOnce(LAG_CONFIG.tables, LAG_CONFIG.batchSize)
+    if PayloadRebuildTimer then
+        task.cancel(PayloadRebuildTimer)
+        PayloadRebuildTimer = nil
+    end
+    PayloadRebuildTimer = task.delay(0.3, function()
+        ReusablePayload = nil
+        PayloadBuildKey = nil
+        CachedLagRemote = nil
+        if LAG_ST.LaggerOn then
+            BuildPayloadOnce(LAG_CONFIG.tables, LAG_CONFIG.batchSize)
+        end
+    end)
 end
 
 -- Pre-build payload once, reuse it FOREVER (ZERO allocation in lag loop)
@@ -1166,27 +1096,53 @@ function PrebuildPayloads()
     BuildPayloadOnce(LAG_CONFIG.tables, LAG_CONFIG.batchSize)
 end
 
+-- Store references to kill EVERYTHING on stop
+local activeInvokeThreads = {}
+local invokeCooldown = false
+
 local function startLagger()
     if LAG_ST.LaggerThread then return end
-    -- Pre-build payloads to avoid lag during sending
+    -- Pre-build payload (built once, reused as reference)
     PrebuildPayloads()
-    local function sendLagPayload(p)
-        local r = FindAnyRemote()
-        if r and r.Parent then
-            pcall(function()
-                if r:IsA("RemoteEvent") or r:IsA("UnreliableRemoteEvent") then
-                    r:FireServer(p)
-                elseif r:IsA("RemoteFunction") then
-                    r:InvokeServer(p)
-                end
-            end)
-        end
-    end
+    -- Set bandwidth limit ONCE at start (persists until changed, no need per-frame)
+    pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge) end)
+    -- Cache remote reference ONCE at start (avoids FindAnyRemote search every frame)
+    CachedLagRemote = FindAnyRemote()
+    -- Reset invoke tracking
+    activeInvokeThreads = {}
+    invokeCooldown = false
     local function startLaggerLoop()
         while LAG_ST.LaggerOn and _G.ExtRunning and CoreActive do
-            pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(math.huge) end)
-            -- Reuse the SAME payload every time - ZERO allocation
-            task.spawn(sendLagPayload, ReusablePayload)
+            -- Refresh cached remote only if it got destroyed/removed
+            if not CachedLagRemote or not CachedLagRemote.Parent then
+                CachedLagRemote = FindAnyRemote()
+            end
+            if CachedLagRemote and ReusablePayload then
+                if CachedLagRemote:IsA("RemoteEvent") or CachedLagRemote:IsA("UnreliableRemoteEvent") then
+                    -- FireServer = async, sends and forgets, zero wait, zero freeze
+                    pcall(function() CachedLagRemote:FireServer(ReusablePayload) end)
+                elseif CachedLagRemote:IsA("RemoteFunction") then
+                    -- Spawn in separate thread so main loop never freezes.
+                    -- Cooldown: don't spawn new thread if previous InvokeServer
+                    -- hasn't returned yet - prevents thread pileup.
+                    if not invokeCooldown then
+                        invokeCooldown = true
+                        local thread = coroutine.create(function()
+                            pcall(function() CachedLagRemote:InvokeServer(ReusablePayload) end)
+                            invokeCooldown = false
+                            -- Auto-remove from tracking list when done
+                            for i = #activeInvokeThreads, 1, -1 do
+                                if activeInvokeThreads[i] == thread then
+                                    table.remove(activeInvokeThreads, i)
+                                end
+                            end
+                        end)
+                        table.insert(activeInvokeThreads, thread)
+                        coroutine.resume(thread)
+                    end
+                end
+            end
+            -- Direct task.wait - main thread never blocked
             task.wait(math.max(LAG_CONFIG.loopWait, 0.05))
         end
     end
@@ -1198,11 +1154,41 @@ end
 
 local function stopLagger()
     LAG_ST.LaggerOn = false
+    -- STEP 1: Kill ALL InvokeServer threads waiting for server response
+    -- These are holding pending requests that will keep sending data
+    for _, t in ipairs(activeInvokeThreads) do
+        pcall(function() coroutine.close(t) end)
+    end
+    activeInvokeThreads = {}
+    invokeCooldown = false
+    -- STEP 2: Close main lagger loop
     if LAG_ST.LaggerThread then
         pcall(function() coroutine.close(LAG_ST.LaggerThread) end)
         LAG_ST.LaggerThread = nil
         _G.ExtLagThread = nil
     end
+    -- STEP 3: Destroy payload immediately - Lua GC drops the 295K pointer table
+    -- Even if Roblox's network layer cached serialized bytes, they reference
+    -- freed Lua tables = server may fail to deserialize = messages dropped silently
+    ReusablePayload = nil
+    PayloadBuildKey = nil
+    -- STEP 4: Invalidate cached remote so no code can accidentally send more
+    CachedLagRemote = nil
+    if PayloadRebuildTimer then
+        task.cancel(PayloadRebuildTimer)
+        PayloadRebuildTimer = nil
+    end
+    -- STEP 5: NETWORK FLUSH - kill ALL queued messages in outgoing buffer
+    -- Roblox buffers outgoing remote calls in its network layer.
+    -- Even after we stop sending, queued messages still transmit to the server.
+    -- Fix: set KBPS to 0 = hard blocks ALL outgoing network traffic.
+    -- The network layer drops/abandons the queued lagger payloads because
+    -- they can't fit through a 0-byte pipe. Normal game traffic (movement,
+    -- inputs) uses the internal replication channel which is NOT affected
+    -- by SetOutgoingKBPSLimit (it only throttles remote events).
+    pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(0) end)
+    task.wait(0.2)
+    -- After the queue is dead, restore normal bandwidth
     pcall(function() game:GetService("NetworkClient"):SetOutgoingKBPSLimit(10000) end)
 end
 
@@ -1242,8 +1228,11 @@ local function StartClientAntiLag()
         while _G.ExtRunning and CoreActive and ST.ClientAntiLagOn do
             pcall(function()
                 for _, ch in ipairs(CoreGui:GetChildren()) do
-                    if (ch.Name:find("BlockList") or ch.Name:find("PlayerBlock")) and not ch:GetAttribute("ExtAuth") then
-                        pcall(function() ch:Destroy() end)
+                    if ch.Name:find("BlockList") or ch.Name:find("PlayerBlock") then
+                        local extAuth = ch:GetAttribute("ExtAuth")
+                        if extAuth == nil then
+                            pcall(function() ch:Destroy() end)
+                        end
                     end
                 end
                 local pg = LP:FindFirstChildOfClass("PlayerGui")
@@ -1714,11 +1703,21 @@ local function EnableAR()
         for _, o in pairs(ch:GetDescendants()) do
             if o:IsA("BallSocketConstraint") or o:IsA("NoCollisionConstraint") or o:IsA("HingeConstraint")
                 or o:IsA("BodyVelocity") or o:IsA("BodyPosition") or o:IsA("BodyGyro") or o:IsA("AlignOrientation") then
-                o:Destroy()
+                pcall(function() o:Destroy() end)
             elseif o:IsA("Attachment") and (o.Name == "A" or o.Name == "B") then
-                o:Destroy()
+                -- Only destroy non-critical custom attachments (ragdoll/physics), NOT character rig attachments
+                pcall(function()
+                    if not o.Parent then return end
+                    -- Skip if this attachment is connected to a Motor6D (character joint)
+                    for _, m in ipairs(o.Parent:GetDescendants()) do
+                        if m:IsA("Motor6D") and (m.Part0 == o.Parent or m.Part1 == o.Parent) then
+                            return
+                        end
+                    end
+                    o:Destroy()
+                end)
             elseif o:IsA("Motor6D") then
-                o.Enabled = true
+                pcall(function() o.Enabled = true end)
             end
         end
     end
@@ -1779,6 +1778,7 @@ local function EnableAR()
             if BS[nS] then StartRec() end
         end))
         table.insert(ST.AntiRagC, RunService.Heartbeat:Connect(function()
+            if not r or not r.Parent or not h or not h.Parent then return end
             if IsRag() then
                 StartRec()
                 local v = r.Velocity
@@ -1786,15 +1786,35 @@ local function EnableAR()
                     r.Velocity = Vector3.new(0, math.min(v.Y, 5), 0)
                 end
             end
-            ST.AntiRagLastV = r.Velocity
+            if r and r.Parent then
+                ST.AntiRagLastV = r.Velocity
+            end
         end))
         table.insert(ST.AntiRagC, c.DescendantAdded:Connect(function(o)
-            if o:IsA("BallSocketConstraint") or o:IsA("NoCollisionConstraint") or o:IsA("HingeConstraint")
-                or o:IsA("BodyVelocity") or o:IsA("BodyPosition") or o:IsA("BodyGyro") or o:IsA("AlignOrientation") then
-                task.defer(function() if o and o.Parent then o:Destroy() end end)
-            elseif o:IsA("Motor6D") then
-                task.defer(function() if o and o.Parent then o.Enabled = true end end)
-            end
+            pcall(function()
+                if not o or not o.Parent then return end
+                if o:IsA("BallSocketConstraint") or o:IsA("NoCollisionConstraint") or o:IsA("HingeConstraint")
+                    or o:IsA("BodyVelocity") or o:IsA("BodyPosition") or o:IsA("BodyGyro") or o:IsA("AlignOrientation") then
+                    task.defer(function() if o and o.Parent then o:Destroy() end end)
+                elseif o:IsA("Motor6D") then
+                    task.defer(function() if o and o.Parent then o.Enabled = true end end)
+                elseif o:IsA("Attachment") and (o.Name == "A" or o.Name == "B") then
+                    task.defer(function()
+                        if not o or not o.Parent then return end
+                        local parent = o.Parent
+                        local isJointAttachment = false
+                        for _, m in ipairs(parent:GetDescendants()) do
+                            if m:IsA("Motor6D") and (m.Part0 == parent or m.Part1 == parent) then
+                                isJointAttachment = true
+                                break
+                            end
+                        end
+                        if not isJointAttachment then
+                            pcall(function() o:Destroy() end)
+                        end
+                    end)
+                end
+            end)
         end))
         ReEnCtrl()
         CleanCon(c)
@@ -1864,7 +1884,10 @@ local function SetupMed(ch)
                     if bp then
                         for _, t in ipairs(bp:GetChildren()) do
                             if t:IsA("Tool") and t.Name:lower():find("medusa") then
-                                pcall(function() c:FindFirstChildOfClass("Humanoid"):EquipTool(t) end)
+                                pcall(function()
+                                    local hm = c:FindFirstChildOfClass("Humanoid")
+                                    if hm then hm:EquipTool(t) end
+                                end)
                                 pcall(function() t:Activate() end)
                                 return
                             end
@@ -2028,7 +2051,14 @@ local function ToggleFPS()
             elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1
             elseif v:IsA("SpecialMesh") then v.TextureId = ""
             elseif v:IsA("Fire") or v:IsA("SpotLight") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then v.Enabled = false
-            elseif v:IsA("SurfaceAppearance") then v:Destroy()
+            elseif v:IsA("SurfaceAppearance") then
+                pcall(function()
+                    v.MapType = Enum.SurfaceAppearanceMapType.Empty
+                    v.RoughnessMap = nil
+                    v.NormalMap = nil
+                    v.ColorMap = nil
+                    v.MetalnessMap = nil
+                end)
             end
         end)
     end
@@ -3198,7 +3228,9 @@ local function BuildUI()
         LAG_CONFIG.loopWait = newWait
         LAG_CONFIG.batchSize = newBatch
 
-        -- Rebuild payload with new config (one-time cost)
+        -- Debounced payload rebuild (waits 0.3s after last slider move)
+        -- Before: rebuilt on EVERY pixel drag = massive lag spike
+        -- After: builds once after slider stops moving = zero lag
         RebuildPayload()
 
         -- Update display with current values
@@ -3743,21 +3775,6 @@ function RefreshConfigList()
         Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 6)
         Hover(loadBtn, C.HVR, C.BG)
 
-        -- Edit button
-        local editBtn = Instance.new("TextButton")
-        editBtn.Text = "EDIT"
-        editBtn.TextColor3 = C.YEL
-        editBtn.Font = Enum.Font.GothamBlack
-        editBtn.TextSize = 10 * SC
-        editBtn.BackgroundColor3 = C.BG
-        editBtn.BackgroundTransparency = 0.5
-        editBtn.Size = UDim2.new(0, 50 * SC, 0, 26 * SC)
-        editBtn.Position = UDim2.new(0.45, 56 * SC, 0.5, -13 * SC)
-        editBtn.ZIndex = 13
-        editBtn.Parent = row
-        Instance.new("UICorner", editBtn).CornerRadius = UDim.new(0, 6)
-        Hover(editBtn, C.HVR, C.BG)
-
         -- Delete button
         local delBtn = Instance.new("TextButton")
         delBtn.Text = "DEL"
@@ -3777,14 +3794,6 @@ function RefreshConfigList()
             LoadConfig(cfgName)
             RefreshConfigList()
             Notify("EXTERNAL HUB", "Config loaded: " .. cfgName, 2, C.GRN)
-        end)
-
-        editBtn.MouseButton1Click:Connect(function()
-            -- Show edit dialog
-            ConfigNameInput.Text = cfgName
-            SaveConfig(cfgName)
-            RefreshConfigList()
-            Notify("EXTERNAL HUB", "Config updated: " .. cfgName, 2, C.YEL)
         end)
 
         delBtn.MouseButton1Click:Connect(function()
