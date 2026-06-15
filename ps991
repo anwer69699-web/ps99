@@ -35,8 +35,37 @@ local LIMITS = {
 
 local LAG_CONFIG = { tables = 120, loopWait = 0.3, tries = 2, batchSize = 300000 }
 local REMOTE_PATHS = { "ReplicatedStorage.SetPlayerBlockList", "ReplicatedStorage.BlockList", "ReplicatedStorage.PlayerBlockList" }
-local DISCORD_LINK = "discord.gg/pQHjBRrRK"
+local DISCORD_LINK = "discord.gg/Vr6KKzmJt"
 
+-- ===== ANTI-EXPLOIT CONFIG =====
+local ANTI_EXPLOIT = {
+    MAX_TELEPORT_DIST = 80,
+    MAX_SPEED_DIFF = 200,
+    POSITION_SMOOTH_FACTOR = 0.7,
+    MIN_VALID_HEALTH = 0,
+    DESYNC_THRESHOLD = 15,
+    MAX_PREDICTION_ERROR = 50,
+    VELOCITY_OUTLIER_THRESHOLD = 150,
+    ANGLE_CHANGE_LIMIT = math.rad(720),
+    GHOST_CHAR_TIMEOUT = 3,
+    MAX_LATENCY_COMP = 0.5,
+    POS_HISTORY_SIZE = 30,
+    MIN_CONSISTENT_FRAMES = 3,
+    HITBOX_SPOOF_DIST = 20,
+    ANTI_INVISIBLE_CHECK = true,
+    ANTI_FAKE_RAGDOLL = true,
+    ANTI_POSITION_RESET = true,
+    ANTI_NETWORK_OWNERSHIP = true,
+    ANTI_VELOCITY_SPOOF = true,
+    ANTI_ANGLE_SPOOF = true,
+    STUCK_TIMEOUT = 5,
+    STUCK_DIST_THRESHOLD = 3,
+    PATH_DEVIATION_MAX = 50,
+    ANTI_SCRIPT_DETECTION = true,
+    VALIDATE_SERVER_POSITIONS = true,
+    ANTI_REMOTE_SPY = true,
+    ANTI_CALLBACK_INJECTION = true,
+}
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
