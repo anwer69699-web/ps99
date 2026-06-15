@@ -1374,7 +1374,7 @@ local function ProcessLockFrame(dt)
                 if lhm then lhm.WalkSpeed = lS end
             end)
 
-            local LOCK_INTERCEPT_DIST = 18
+            local LOCK_INTERCEPT_DIST = 12
             local fullVel = ST.PredictedVel
             local horizVel = Vector3.new(fullVel.X, 0, fullVel.Z)
             local horizSpeed = horizVel.Magnitude
