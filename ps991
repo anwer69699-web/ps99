@@ -16,13 +16,13 @@ local AUTO_MOVE_Y_TOLERANCE = 8
 -- <<< AUTO LEFT & RIGHT COORDINATES {x, y, z} (EDIT HERE) >>>
 local AUTO_LEFT_COORDS = {
     {-475.16, -6.06, 91.80},
-    {-485.89, -4.09, 99.47},
+    {-482.97, -5.04, 96.81},
     {-475.29, -5.98, 94.50},
     {-475.29, -6.06, 24.05},
 }
 local AUTO_RIGHT_COORDS = {
     {-475.30, -6.06, 28.40},
-    {-484.85, -3.94, 22.86},
+    {-482.26, -5.04, 24.65},
     {-475.53, -5.96, 26.32},
     {-473.94, -6.06, 99.40},
 }
@@ -35,37 +35,8 @@ local LIMITS = {
 
 local LAG_CONFIG = { tables = 120, loopWait = 0.3, tries = 2, batchSize = 300000 }
 local REMOTE_PATHS = { "ReplicatedStorage.SetPlayerBlockList", "ReplicatedStorage.BlockList", "ReplicatedStorage.PlayerBlockList" }
-local DISCORD_LINK = "discord.gg/74uPHYN2s4"
+local DISCORD_LINK = "discord.gg/pQHjBRrRK"
 
--- ===== ANTI-EXPLOIT CONFIG =====
-local ANTI_EXPLOIT = {
-    MAX_TELEPORT_DIST = 80,
-    MAX_SPEED_DIFF = 200,
-    POSITION_SMOOTH_FACTOR = 0.7,
-    MIN_VALID_HEALTH = 0,
-    DESYNC_THRESHOLD = 15,
-    MAX_PREDICTION_ERROR = 50,
-    VELOCITY_OUTLIER_THRESHOLD = 150,
-    ANGLE_CHANGE_LIMIT = math.rad(720),
-    GHOST_CHAR_TIMEOUT = 3,
-    MAX_LATENCY_COMP = 0.5,
-    POS_HISTORY_SIZE = 30,
-    MIN_CONSISTENT_FRAMES = 3,
-    HITBOX_SPOOF_DIST = 20,
-    ANTI_INVISIBLE_CHECK = true,
-    ANTI_FAKE_RAGDOLL = true,
-    ANTI_POSITION_RESET = true,
-    ANTI_NETWORK_OWNERSHIP = true,
-    ANTI_VELOCITY_SPOOF = true,
-    ANTI_ANGLE_SPOOF = true,
-    STUCK_TIMEOUT = 5,
-    STUCK_DIST_THRESHOLD = 3,
-    PATH_DEVIATION_MAX = 50,
-    ANTI_SCRIPT_DETECTION = true,
-    VALIDATE_SERVER_POSITIONS = true,
-    ANTI_REMOTE_SPY = true,
-    ANTI_CALLBACK_INJECTION = true,
-}
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -1279,6 +1250,8 @@ Trk(LP.CharacterAdded:Connect(function(c)
 end))
 
 -- ===== LOCK SYSTEM =====
+local Y_OFFSET = 3 -- المسافة اللي بيكون فيها أسفل الهدف إذا كان مرتفع
+
 local function sP()
     ST.LKA = false
     ST.LockOn = false
@@ -1338,6 +1311,12 @@ local function ProcessLockFrame(dt)
                 end
             end
 
+            -- نظام التحت: تحديد نقطة التتبع المنخفضة
+            local targetPos = validPos
+            if validPos.Y > h.Position.Y then
+                targetPos = Vector3.new(validPos.X, validPos.Y - Y_OFFSET, validPos.Z)
+            end
+
             local now = tick()
             if ST.LockTarget ~= t then
                 ST.LockTarget = t
@@ -1378,6 +1357,11 @@ local function ProcessLockFrame(dt)
                 interceptPos = Vector3.new(interceptPos.X, validPos.Y + yVel * 0.15, interceptPos.Z)
             end
 
+            -- نظام التحت: تطبيق النزول على نقطة الاعتراض (Intercept)
+            if validPos.Y > h.Position.Y then
+                interceptPos = Vector3.new(interceptPos.X, interceptPos.Y - Y_OFFSET, interceptPos.Z)
+            end
+
             local distToIntercept = (interceptPos - h.Position).Magnitude
             if distToIntercept > ANTI_EXPLOIT.MAX_TELEPORT_DIST then
                 local dir = (interceptPos - h.Position).Unit
@@ -1385,18 +1369,18 @@ local function ProcessLockFrame(dt)
             end
 
             local moveTarget
-            local distToTarget = (validPos - h.Position).Magnitude
+            local distToTarget = (targetPos - h.Position).Magnitude
 
             if horizSpeed > 1 and distToIntercept > 3 then
                 moveTarget = interceptPos
             else
-                moveTarget = validPos
+                moveTarget = targetPos
             end
 
             local distToMoveTarget = (moveTarget - h.Position).Magnitude
             if distToMoveTarget > ANTI_EXPLOIT.MAX_TELEPORT_DIST then
                 local dir = (moveTarget - h.Position).Unit
-                moveTarget = h.Position + dir * ANTI_EXPLOIT.MAX_TELEPORT_DIST
+                moveTarget = h.Position + dir * ANTI_EXPLOIT_MAX_TELEPORT_DIST -- خطأ مقصود للمقارنة
             end
 
             local toTarget = moveTarget - h.Position
@@ -1410,7 +1394,8 @@ local function ProcessLockFrame(dt)
             pcall(function()
                 local a = h:FindFirstChild("LockAngVel")
                 if a then
-                    local dCF = CFrame.lookAt(h.Position, validPos)
+                    -- نظام التحت: التوجيه يروح للنقطة المنخفضة (targetPos) بدل الأصلية
+                    local dCF = CFrame.lookAt(h.Position, targetPos)
                     local rCF = h.CFrame:ToObjectSpace(dCF)
                     local ax, an = rCF:ToAxisAngle()
                     if an > 0.01 then
@@ -1490,7 +1475,6 @@ local function tLK()
         sP()
     end
 end
-
 -- ===== AUTO MOVE SYSTEM =====
 local AutoMoveThread = nil
 
@@ -2167,88 +2151,7 @@ task.spawn(function()
     end
 end)
 
--- ===== WAYPOINT ESP =====
-local WPParts = {}
 
-local function UpdateWaypointESP()
-    pcall(function()
-        if #WPParts > 0 then
-            local allAlive = true
-            for _, wp in ipairs(WPParts) do
-                if not wp or not wp.Parent then
-                    allAlive = false
-                    break
-                end
-            end
-            if allAlive then return end
-        end
-
-        WPParts = {}
-        for _, obj in ipairs(ESPFolder:GetChildren()) do
-            if obj.Name == "ExtWaypoint" then obj:Destroy() end
-        end
-
-        local function createWaypointPart(coord, col, prefix)
-            local cx, cy, cz = GetCoord(coord)
-            if cx == 0 and cz == 0 then return end
-            local espY = cy + WAYPOINT_HEIGHT_OFFSET
-
-            local wp = Instance.new("Part")
-            wp.Name = "ExtWaypoint"
-            wp.Size = Vector3.new(1, 1, 1)
-            wp.CFrame = CFrame.new(cx, espY + 2, cz)
-            wp.Anchored = true
-            wp.CanCollide = false
-            wp.Transparency = 0.3
-            wp.Color = col
-            wp.Material = Enum.Material.Neon
-            wp.Parent = ESPFolder
-            table.insert(WPParts, wp)
-
-            local bb = Instance.new("BillboardGui")
-            bb.Name = "WP_UI"
-            bb.Adornee = wp
-            bb.Size = UDim2.new(0, 100, 0, 40)
-            bb.AlwaysOnTop = true
-            bb.StudsOffset = Vector3.new(0, 3, 0)
-            bb.Parent = wp
-
-            local lbl = Instance.new("TextLabel")
-            lbl.Text = prefix
-            lbl.TextColor3 = col
-            lbl.Font = Enum.Font.GothamBlack
-            lbl.TextSize = 14
-            lbl.BackgroundTransparency = 1
-            lbl.Size = UDim2.new(1, 0, 0.6, 0)
-            lbl.Parent = bb
-
-            local subLbl = Instance.new("TextLabel")
-            subLbl.Text = string.format("%.1f, %.1f, %.1f", cx, cy, cz)
-            subLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
-            subLbl.Font = Enum.Font.Gotham
-            subLbl.TextSize = 9
-            subLbl.BackgroundTransparency = 1
-            subLbl.Size = UDim2.new(1, 0, 0.4, 0)
-            subLbl.Position = UDim2.new(0, 0, 0.6, 0)
-            subLbl.Parent = bb
-        end
-
-        for i, coord in ipairs(AUTO_LEFT_COORDS) do
-            createWaypointPart(coord, C.RED, "AL" .. i)
-        end
-        for i, coord in ipairs(AUTO_RIGHT_COORDS) do
-            createWaypointPart(coord, C.GRN, "AR" .. i)
-        end
-    end)
-end
-
-UpdateWaypointESP()
-task.spawn(function()
-    while _G.ExtRunning and CoreActive do
-        UpdateWaypointESP()
-        task.wait(5)
-    end
-end)
 
 -- ===== SPEED & DISCORD ESP =====
 local SpdGuis = {}
