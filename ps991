@@ -415,7 +415,7 @@ local ST = {
     AutoStealOn = true, isStealing = false, stealStart = nil, StealData = {},
     SpdC = nil, LKC = nil, SpdMode = "NORMAL", lockCD = 0, LKA = false,
     IRS_isExecuting = false,
-    SpeedPool = { 80, 195, 30, 85, 150, 195, 100, 50, 195, 195, 83, 99 },
+    SpeedPool = {9e9, 9e9, 9e9, 9e9, 9e9, 9e9, 9e9, 9e9, 9e9, 9e9, 9e9, 9e9},
     CurrentIndex = 0, SpoofActive = false, RealSpeed = nil,
     justBound = false, justBoundKey = nil, ClientAntiLagOn = true,
     AutoLeftOn = false, AutoRightOn = false,
@@ -965,7 +965,7 @@ local function IRS_ActivateReset()
     ST.SpoofActive = true
 
     -- Fast reset: 0.3s spoof then restore
-    task.delay(0.3, function()
+    task.delay(0.05, function()
         ST.SpoofActive = false
         if hum and hum.Parent then
             hum.WalkSpeed = ST.RealSpeed
@@ -1279,7 +1279,7 @@ Trk(LP.CharacterAdded:Connect(function(c)
 end))
 
 -- ===== LOCK SYSTEM =====
-local Y_OFFSET = 3 -- المسافة اللي بيكون فيها أسفل الهدف إذا كان مرتفع
+local Y_OFFSET = 5 -- المسافة اللي بيكون فيها أسفل الهدف إذا كان مرتفع
 
 local function sP()
     ST.LKA = false
