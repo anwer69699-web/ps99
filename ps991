@@ -481,10 +481,12 @@ end
 
 local function RestoreKeybinds()
     pcall(function()
-        if not _LoadedSave.Hotkeys then return end
+        -- Read fresh from file so we get the latest saved keybinds
+        local freshSave = LoadSave()
+        if not freshSave.Hotkeys then return end
         for _, cfg in ipairs(HotkeyConfig) do
-            if cfg.saveName and _LoadedSave.Hotkeys[cfg.saveName] then
-                local kName = _LoadedSave.Hotkeys[cfg.saveName]
+            if cfg.saveName and freshSave.Hotkeys[cfg.saveName] then
+                local kName = freshSave.Hotkeys[cfg.saveName]
                 local kCode = Enum.KeyCode[kName]
                 if kCode then
                     cfg.key = kCode
@@ -492,6 +494,8 @@ local function RestoreKeybinds()
                 end
             end
         end
+        -- Also update _LoadedSave so other functions see the latest
+        _LoadedSave.Hotkeys = freshSave.Hotkeys
     end)
 end
 
@@ -993,7 +997,7 @@ local function ProcessLockFrame(dt)
     local horizVel = Vector3.new(fullVel.X, 0, fullVel.Z)
     local horizSpeed = horizVel.Magnitude
     local horizDir = horizSpeed > 1 and horizVel.Unit or Vector3.zero
-    local interceptPos = predicted + horizDir * 17
+    local interceptPos = predicted + horizDir * 16
     interceptPos = Vector3.new(interceptPos.X, predicted.Y, interceptPos.Z)
     local distToIntercept = (interceptPos - h.Position).Magnitude
     local moveTarget = interceptPos
@@ -1863,26 +1867,7 @@ local function BuildUI()
     FB.Mode = MakeFloatBtn(MainGui, "MODE", 1, 0.3, -(15 + 72), 156, 72, "FloatMode")
     FB.Lock = MakeFloatBtn(MainGui, "LOCK", 1, 0.3, -(15 + 72 + 6 + 72), 156, 72, "FloatLock")
 
-    -- Register keybinds for float buttons
-    local fbKeys = {
-        {btn = FB.AR, name = "Auto Right", default = Enum.KeyCode.R, saveName = "HotkeyAutoRight"},
-        {btn = FB.AL, name = "Auto Left", default = Enum.KeyCode.Q, saveName = "HotkeyAutoLeft"},
-        {btn = FB.Drop, name = "Drop", default = Enum.KeyCode.V, saveName = "HotkeyDrop"},
-        {btn = FB.TPD, name = "TP Down", default = Enum.KeyCode.T, saveName = "HotkeyTPDown"},
-        {btn = FB.Mode, name = "Mode", default = Enum.KeyCode.F, saveName = "HotkeyMode"},
-        {btn = FB.Lock, name = "Lock", default = Enum.KeyCode.E, saveName = "HotkeyLock"},
-    }
-    for _, hk in ipairs(fbKeys) do
-        table.insert(HotkeyConfig, {
-            btn = hk.btn,
-            name = hk.name,
-            default = hk.default,
-            saveName = hk.saveName,
-            key = hk.default,
-            keyBtn = nil,
-        })
-    end
-
+    -- Float button keybinds are registered later in MakeFloatKeyRow section
     for k, btn in pairs(FB) do
         FloatButtons[k] = btn
     end
@@ -2201,12 +2186,27 @@ local function BuildUI()
                 if gpe then return end
                 if input.KeyCode ~= nil and input.KeyCode ~= Enum.KeyCode.Unknown then
                     cap = true
+                    -- Remove old key from ALL configs to prevent duplicates
+                    local oldKey = cfg.key
                     cfg.key = input.KeyCode
+                    -- Clear old key from any other cfg that might have it
+                    for _, otherCfg in ipairs(HotkeyConfig) do
+                        if otherCfg ~= cfg and otherCfg.key == input.KeyCode then
+                            otherCfg.key = oldKey
+                            if otherCfg.keyBtn then otherCfg.keyBtn.Text = oldKey.Name end
+                        end
+                    end
                     keyBtn.Text = input.KeyCode.Name
                     ST.justBound = true
                     ST.justBoundKey = input.KeyCode
                     if conn then conn:Disconnect() end
                     task.delay(0.3, function() ST.justBound = false ST.justBoundKey = nil end)
+                    -- Save immediately + update _LoadedSave
+                    SaveSave()
+                    pcall(function()
+                        _LoadedSave.Hotkeys = _LoadedSave.Hotkeys or {}
+                        _LoadedSave.Hotkeys[cfg.saveName] = input.KeyCode.Name
+                    end)
                 end
             end)
             task.delay(5, function()
