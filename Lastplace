@@ -32,7 +32,7 @@ local FOLDER_NAME = "ExternalHubFolder"
 local ESP_FOLDER_NAME = "ExtESP"
 local SAVE_KEY = "ExternalHub_SaveData_v17"
 local CONFIGS_KEY = "ExternalHub_Configs_v17"
-local STEAL_DELAY = 1.3
+local STEAL_DELAY = 2.6
 local AUTO_MOVE_XZ_TOLERANCE = 0.5
 local AUTO_MOVE_Y_TOLERANCE = 8
 
@@ -1781,13 +1781,37 @@ local function ExecSteal(pr)
     d.r = false
     ST.isStealing = true
     ST.stealStart = tick()
-    ST.StealEndTick = tick() + STEAL_DELAY
+    
+    -- قراءة المدة من الأعلى وتقسيمها لنصفين (مثلاً 2.6 تصير 1.3 و 1.3)
+    local halfTime = STEAL_DELAY / 2
+    
+    ST.StealEndTick = tick() + halfTime
     ST.StealOscillating = false
     ST.StealTargetPrompt = pr
+    
     task.spawn(function()
+        -- بداية المسك الأول
         for _, f in ipairs(d.h) do task.spawn(f) end
-        task.wait(STEAL_DELAY)
+        
+        -- الانتظار قدرة النصف الأول (1.3 ثانية)
+        task.wait(halfTime)
+        
+        -- إطلاق السرقة الأولى طبيعي بدون فصل
         for _, f in ipairs(d.t) do task.spawn(f) end
+        
+        -- تحديث العداد للنصف الثاني
+        ST.StealEndTick = tick() + halfTime
+        
+        -- بداية المسك الثاني ليكمّل الشريط
+        for _, f in ipairs(d.h) do task.spawn(f) end
+        
+        -- الانتظار قدرة النصف الثاني (1.3 ثانية)
+        task.wait(halfTime)
+        
+        -- إطلاق السرقة الثانية طبيعي
+        for _, f in ipairs(d.t) do task.spawn(f) end
+        
+        -- إعادة تعيين الحالة
         d.r = true
         ST.isStealing = false
         ST.StealEndTick = 0
