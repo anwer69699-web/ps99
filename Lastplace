@@ -2,22 +2,22 @@
 --// Settings are at the top — edit directly in the script
 
 local AIM_CFG = {
-    DIST                 = 4,      -- أمام الهدف 4 ستدز
-    HEIGHT               = -1,     -- فرق ارتفاع بسيط
-    V_OFF                = 0.25,
+    DIST                 = 5,      -- أمام الهدف 4 ستدز
+    HEIGHT               = 0,     -- فرق ارتفاع بسيط
+    V_OFF                = 0,
 
-    VERT_SPEED           = 90,
+    VERT_SPEED           = 95,
     TURN_SPEED           = 55,
     MAX_TURN_RATE        = 40,
 
     MAX_TORQUE           = 500000,
 
-    PREDICT              = 0.12,
-    JUMP_PREDICT         = 0.15,
+    PREDICT              = 1,
+    JUMP_PREDICT         = 0,
 
     TP_DOWN_PREDICT      = 0.25,
 
-    JUMP_DETECT_THRESHOLD= 2,
+    JUMP_DETECT_THRESHOLD= 1,
     MAX_JUMP_HISTORY     = 12,
     JUMP_COUNT_TRIGGER   = 1,
 
@@ -933,7 +933,7 @@ end
 
 Trk(LP.CharacterAdded:Connect(function(c) task.wait(0.1) SetupUnwalk(c) end))
 
---// AIMBOT SYSTEM (Strong Logic)
+--// AIMBOT SYSTEM (Final Perfect Pathing)
 local aimEnabled = false
 local _batEquippedThisRun = false
 local _aimTarget = nil
@@ -1086,7 +1086,7 @@ local function predictTargetPosition(targetHRP, mode)
         TP_RaycastParams.FilterDescendantsInstances = {LP.Character}
         local rr = workspace:Raycast(Vector3.new(landX, pos.Y, landZ), Vector3.new(0, -200, 0), TP_RaycastParams)
         local gy = rr and rr.Position.Y or pos.Y
-        pos = Vector3.new(landX, gy + AIM_CFG.HEIGHT + 3, landZ)
+        pos = Vector3.new(landX, gy + AIM_CFG.HEIGHT, landZ)
         return pos, true
     elseif mode == "falling" then
         predictTime = AIM_CFG.PREDICT * 0.8
@@ -1135,7 +1135,7 @@ function ToggleAim()
     if SyncToggles then SyncToggles() end
 end
 
---// Heartbeat Aimbot
+--// Heartbeat Aimbot (Final Movement Fix)
 _G.ExtAimC = RunService.Heartbeat:Connect(function(dt)
     if not aimEnabled then return end
     local char = LP.Character
@@ -1161,6 +1161,29 @@ _G.ExtAimC = RunService.Heartbeat:Connect(function(dt)
     recordTargetData(target)
     local mode = detectInfiniteJump(target)
     local aimPos, isEmergency = predictTargetPosition(target, mode)
+    
+    -- [الخوارزمية النهائية] نحسب اتجاه الحركة الفعلي للهدف
+    local targetHorVel = Vector3.new(target.Velocity.X, 0, target.Velocity.Z)
+    local moveSpeed = targetHorVel.Magnitude
+    
+    local pathDir
+    if moveSpeed > 5 then
+        -- الهدف يتحرك: نأخذ اتجاه سرعته كمسار
+        pathDir = targetHorVel.Unit
+    else
+        -- الهدف واقف: نأخذ اتجاه نظره كمسار
+        pathDir = Vector3.new(target.CFrame.LookVector.X, 0, target.CFrame.LookVector.Z)
+        if pathDir.Magnitude > 0.01 then
+            pathDir = pathDir.Unit
+        else
+            pathDir = Vector3.new(0, 0, -1) -- احتياطي إذا كان الاتجاه صفر
+        end
+    end
+    
+    -- نقطة الوقوف: أمام المسار بـ 4 ستودز، وتحته بشوي
+    local standPos = aimPos + (pathDir * AIM_CFG.DIST) + Vector3.new(0, AIM_CFG.HEIGHT, 0)
+    
+    -- الدوران لينظر للهدف
     local look = aimPos - root.Position
     local flatLook = Vector3.new(look.X, 0, look.Z)
     hum.AutoRotate = false
@@ -1177,27 +1200,14 @@ _G.ExtAimC = RunService.Heartbeat:Connect(function(dt)
     else
         _angVel.AngularVelocity = Vector3.zero
     end
-    local dir = look.Magnitude > 0.01 and look.Unit or Vector3.zero
+    
     local spd = gNS()
-    local useDist = AIM_CFG.DIST; local useHeight = AIM_CFG.HEIGHT
-    if mode == "infinite_jump" then
-        useDist = AIM_CFG.DIST * 0.5; useHeight = AIM_CFG.HEIGHT - 1.5
-    elseif mode == "tp_down" then
-        useDist = AIM_CFG.TP_DOWN_RESPONSE_DIST; useHeight = AIM_CFG.HEIGHT + 2
-    elseif mode == "falling" then
-        useDist = AIM_CFG.DIST * 0.3
-    end
-    local standPos = aimPos - (dir * useDist) + Vector3.new(0, useHeight, 0)
     local moveDir = standPos - root.Position
     local hDir = Vector3.new(moveDir.X, 0, moveDir.Z)
-    local targetFlatVel = Vector3.new(target.Velocity.X, 0, target.Velocity.Z)
-    local targetSpeed = targetFlatVel.Magnitude
-    local hVel
-    if targetSpeed < 0.5 and hDir.Magnitude < 3 then
-        hVel = Vector3.zero
-    else
-        hVel = hDir.Magnitude > 0.1 and hDir.Unit * spd or Vector3.zero
-    end
+    
+    -- الحركة بدون أي تباطؤ
+    local hVel = hDir.Magnitude > 0.1 and hDir.Unit * spd or Vector3.zero
+    
     local vVel
     if isEmergency then
         vVel = Vector3.new(0, math.sign(moveDir.Y) * AIM_CFG.VERT_SPEED * 1.3, 0)
@@ -1251,7 +1261,6 @@ Trk(LP.CharacterAdded:Connect(function(char)
         if hrp then purgeHRP(hrp); setupAngVel(hrp) end
     end
 end))
-
 --// AutoMove (Semi / Full)
 local AutoMoveThread = nil
 
